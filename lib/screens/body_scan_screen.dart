@@ -15,8 +15,6 @@ import '../utils/pose_painter.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
 
-enum CameraStatus { loading, available, denied, notFound, error }
-
 class BodyScanScreen extends StatefulWidget {
   final String modality;
   final String exercise;
@@ -29,18 +27,14 @@ class BodyScanScreen extends StatefulWidget {
 class _BodyScanScreenState extends State<BodyScanScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioRecorder _audioRecorder = AudioRecorder();
+  final TextEditingController _textController = TextEditingController();
   CameraController? _cameraController;
   final RepCounter _repCounter = RepCounter();
-
-  // Pose Detection
-  late final PoseDetector _poseDetector;
-  bool _isBusy = false;
-  CustomPaint? _customPaint;
 
   CameraStatus _cameraStatus = CameraStatus.loading;
   bool _isRecording = false;
   bool _isProcessing = false;
-  bool _isSynced = false; // Controle de interação para Web Audio
+  bool _isSynced = false;
   String _iaStatus = "SISTEMA INICIANDO";
 
   final String _hfServerUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
@@ -48,42 +42,20 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   @override
   void initState() {
     super.initState();
-    _poseDetector = PoseDetector(options: PoseDetectorOptions());
     _checkAndInitializeCamera();
   }
 
   @override
   void dispose() {
-    _poseDetector.close();
     _cameraController?.dispose();
     _audioPlayer.dispose();
     _audioRecorder.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
   Future<void> _checkAndInitializeCamera() async {
     try {
-      if (kIsWeb) {
-        final cameras = await availableCameras();
-        if (cameras.isEmpty) {
-          setState(() { _cameraStatus = CameraStatus.notFound; });
-          return;
-        }
-        _cameraController = CameraController(cameras.first, ResolutionPreset.medium);
-        await _cameraController!.initialize();
-        setState(() {
-          _cameraStatus = CameraStatus.available;
-          _iaStatus = "AGUARDANDO SINCRONIZAÇÃO";
-        });
-        return;
-      }
-
-      final status = await Permission.camera.request();
-      if (status.isDenied) {
-        setState(() { _cameraStatus = CameraStatus.denied; });
-        return;
-      }
-
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         setState(() { _cameraStatus = CameraStatus.notFound; });
@@ -92,12 +64,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
       _cameraController = CameraController(cameras.first, ResolutionPreset.medium, enableAudio: false);
       await _cameraController!.initialize();
-      _cameraController!.startImageStream(_processCameraImage);
 
       if (mounted) {
         setState(() {
           _cameraStatus = CameraStatus.available;
-          _iaStatus = "SCANNER ATIVO";
+          _iaStatus = kIsWeb ? "AGUARDANDO SINCRONIZAÇÃO" : "SCANNER ATIVO";
         });
       }
     } catch (e) {
@@ -105,52 +76,29 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     }
   }
 
-  // Função para dar o "Start" real (Necessário para áudio no Chrome)
   void _syncSystem() {
     setState(() {
       _isSynced = true;
-      _iaStatus = "ORIENTANDO ALUNO";
+      _iaStatus = "CONECTANDO À TERLINET";
     });
-    _welcomeStudent();
+    _speakToIA("INICIAR");
   }
 
-  void _welcomeStudent() {
-    String message = "";
-    switch (widget.exercise) {
-      case 'AGACHAMENTO':
-        message = 'Olá! Tudo bem aí? Aqui é a TerlineT. Para iniciarmos o agachamento, eu preciso que você se afaste para eu poder enxergar todos os seus movimentos, dos pés à cabeça. Deixe o som do seu dispositivo no máximo para conseguir me ouvir orientando e contando as suas repetições. Assim que você se posicionar e eu te enxergar por inteiro, começamos!';
-        break;
-      case 'ROSCA DIRETA':
-        message = 'Oi! Tudo certo para o treino? Sou a TerlineT. Para eu acompanhar sua rosca direta, por favor, afaste-se um pouco para que eu veja seus braços e tronco claramente. Aumente o som do celular para ouvir minhas dicas de postura e a contagem. Estou pronta para observar você!';
-        break;
-      default:
-        message = 'Olá! Tudo bem? Sou a TerlineT. Para começarmos este exercício, posicione o dispositivo de forma estável e afaste-se para que eu veja seu corpo inteiro. Não esqueça de deixar o volume no máximo para me ouvir contando seus movimentos. Vamos nessa!';
-    }
-    _speakToIA(message);
-  }
-
-  // Simulação de movimento para teste no Chrome (PC)
+  // Simulação para o Chrome
   void _simulateMovement() {
     setState(() {
       _repCounter.count++;
       _iaStatus = "MOVIMENTO DETECTADO";
     });
     if (_repCounter.count % 5 == 0) {
-      _speakToIA("Excelente ritmo! Você já completou ${_repCounter.count} repetições. Continue assim!");
+      _speakToIA("Incrível! Você já completou ${_repCounter.count} repetições. Mantenha o ritmo!");
     }
-  }
-
-  Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy || kIsWeb) return;
-    _isBusy = true;
-    // Lógica ML Kit Pose (Nativa Mobile)
-    _isBusy = false;
   }
 
   Future<void> _speakToIA(String userText) async {
     setState(() {
       _isProcessing = true;
-      _iaStatus = "IA PENSANDO...";
+      _iaStatus = "TERLINET PENSANDO...";
     });
     try {
       final response = await http.post(
@@ -161,25 +109,22 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           "modality": widget.exercise,
           "reps": _repCounter.count,
         }),
-      ).timeout(const Duration(seconds: 10));
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final String? audioBase64 = data['audio'];
-        setState(() { _iaStatus = "TREINADOR FALANDO"; });
-        if (audioBase64 != null) {
-          await _audioPlayer.play(BytesSource(base64Decode(audioBase64)));
+        setState(() { _iaStatus = "TERLINET FALANDO"; });
+        if (data['audio'] != null) {
+          await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
         }
       }
     } catch (e) {
-      print("Erro na IA: $e");
       setState(() { _iaStatus = "ERRO DE CONEXÃO"; });
     } finally {
       setState(() { _isProcessing = false; });
     }
   }
 
-  // Métodos de Gravação (Voz)
   Future<void> _startRecording() async {
     if (await _audioRecorder.hasPermission()) {
       final directory = await getTemporaryDirectory();
@@ -190,7 +135,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   Future<void> _stopAndSend() async {
     final path = await _audioRecorder.stop();
-    setState(() { _isRecording = false; _isProcessing = true; _iaStatus = "ANALISANDO VOZ..."; });
+    setState(() { _isRecording = false; _isProcessing = true; _iaStatus = "ANALISANDO..."; });
     if (path != null) {
       var request = http.MultipartRequest('POST', Uri.parse('$_hfServerUrl/voice_query'));
       request.fields['modality'] = widget.exercise;
@@ -214,8 +159,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       body: Stack(
         children: [
           _buildCameraLayer(),
-
-          // Interface de Sincronização (Apenas no início)
           if (!_isSynced) _buildSyncOverlay(),
 
           // HUD Superior
@@ -232,14 +175,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
             ),
           ),
 
-          // Botões de Teste para WEB (PC)
-          if (kIsWeb && _isSynced) _buildWebTestButtons(),
-
-          // HUD IA Status
-          _buildIAStatusPanel(),
-
-          // Microfone
-          if (_isSynced) _buildMicButton(),
+          // Interação
+          if (_isSynced) _buildInteractionPanel(),
 
           // Botão Sair
           Positioned(top: 50, left: 20, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))),
@@ -248,23 +185,29 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     );
   }
 
+  Widget _buildCameraLayer() {
+    if (_cameraStatus == CameraStatus.loading) return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return Container(color: Colors.black);
+    return CameraPreview(_cameraController!);
+  }
+
   Widget _buildSyncOverlay() {
     return Container(
-      color: Colors.black87,
+      color: Colors.black90,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.psychology, color: WelcomeScreen.panoOrange, size: 80),
+            const Icon(Icons.bolt, color: WelcomeScreen.panoOrange, size: 100),
             const SizedBox(height: 20),
-            Text("SISTEMA PRONTO", style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24)),
+            Text("TERLINET VISION", style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            const Text("Clique abaixo para iniciar a IA e as orientações", style: TextStyle(color: Colors.white54)),
-            const SizedBox(height: 30),
+            const Text("Sistema pronto para análise corporal", style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 40),
             ElevatedButton(
               onPressed: _syncSystem,
-              style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange, padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20)),
-              child: const Text("INICIAR TREINO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20)),
+              child: const Text("INICIAR TREINO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
           ],
         ),
@@ -272,66 +215,57 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     );
   }
 
-  Widget _buildWebTestButtons() {
+  Widget _buildInteractionPanel() {
     return Positioned(
-      top: 150,
+      bottom: 20,
+      left: 20,
       right: 20,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ElevatedButton.icon(
-            onPressed: _simulateMovement,
-            icon: const Icon(Icons.add),
-            label: const Text("SIMULAR REP"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
+          // Status IA
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.black87, border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.3)), borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              children: [
+                Text(_iaStatus, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10, fontWeight: FontWeight.bold)),
+                if (_isProcessing) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator(backgroundColor: Colors.black, color: WelcomeScreen.panoOrange)),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          const Text("Modo Web: Use para testar IA", style: TextStyle(color: Colors.white24, fontSize: 10)),
+          const SizedBox(height: 15),
+          // Chat Bar
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(30), border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.5))),
+                  child: TextField(
+                    controller: _textController,
+                    onSubmitted: (val) { if(val.isNotEmpty) { _speakToIA(val); _textController.clear(); } },
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(hintText: "Digite algo para a TerlineT...", hintStyle: TextStyle(color: Colors.white24), border: InputBorder.none),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onLongPressStart: (_) => _startRecording(),
+                onLongPressEnd: (_) => _stopAndSend(),
+                onTap: () { if(_textController.text.isNotEmpty) { _speakToIA(_textController.text); _textController.clear(); } },
+                child: CircleAvatar(radius: 28, backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange, child: Icon(_isProcessing ? Icons.sync : (_textController.text.isEmpty ? Icons.mic : Icons.send), color: Colors.black)),
+              ),
+            ],
+          ),
+          if (kIsWeb) Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: TextButton(onPressed: _simulateMovement, child: const Text("SIMULAR REPETIÇÃO (TESTE WEB)", style: TextStyle(color: Colors.white24, fontSize: 10))),
+          ),
         ],
       ),
     );
-  }
-
-  Widget _buildIAStatusPanel() {
-    return Positioned(
-      bottom: 150,
-      left: 30,
-      right: 30,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(color: Colors.black87, border: Border.all(color: WelcomeScreen.panoOrange, width: 2), borderRadius: BorderRadius.circular(10)),
-        child: Column(
-          children: [
-            Text(_iaStatus, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 12, fontWeight: FontWeight.bold)),
-            if (_isProcessing) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator(backgroundColor: Colors.black, color: WelcomeScreen.panoOrange)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMicButton() {
-    return Positioned(
-      bottom: 40,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: GestureDetector(
-          onLongPressStart: (_) => _startRecording(),
-          onLongPressEnd: (_) => _stopAndSend(),
-          child: CircleAvatar(
-            radius: 40,
-            backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange,
-            child: Icon(_isProcessing ? Icons.sync : Icons.mic, color: Colors.black, size: 40),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCameraLayer() {
-    if (_cameraStatus == CameraStatus.loading) return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
-    if (_cameraStatus != CameraStatus.available || _cameraController == null) return Container(color: Colors.black);
-    return Stack(fit: StackFit.expand, children: [CameraPreview(_cameraController!), if (_customPaint != null) _customPaint!]);
   }
 
   Widget _buildStatTile(String label, String value) {
