@@ -1,102 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="terlinet_treiner">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏋🏽‍♂️</text></svg>">
-
-  <!-- Social Media Preview (OG Tags) -->
-  <meta property="og:title" content="TerlineT Treiner">
-  <meta property="og:description" content="Sua IA Personal Trainer com Visão Computacional. Estilo Panobianco Cyberpunk.">
-  <meta property="og:image" content="assets/assets/images/preview.png">
-  <meta property="og:url" content="https://terlinet.github.io/treiner/">
-  <meta name="twitter:card" content="summary_large_image">
-
-  <!-- MediaPipe Pose SDK for Web Vision -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>TerlineT Treiner</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-
   <script>
-    // Bridge to send data from JS to Flutter
+    // Ponte global para enviar landmarks para o Flutter
     window.onPoseDetected = null;
-    let pose = null;
 
-    async function initMediaPipe() {
-      if (pose) return; // Already initialized
+    function initMediaPipe(videoElementId) {
+      console.log("Inicializando MediaPipe para o elemento:", videoElementId);
+      const videoElement = document.getElementById(videoElementId) || document.querySelector('video');
 
-      pose = new Pose({
-        locateFile: (file) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-        }
+      if (!videoElement) {
+        console.error("Elemento de vídeo não encontrado");
+        return;
+      }
+
+      const pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
       });
 
       pose.setOptions({
-        modelComplexity: 0, // 0 is faster for mobile browsers
+        modelComplexity: 1,
         smoothLandmarks: true,
+        enableSegmentation: false,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5
       });
 
       pose.onResults((results) => {
-        if (window.onPoseDetected && results.poseLandmarks) {
-          window.onPoseDetected(JSON.stringify(results.poseLandmarks));
+        if (results.poseLandmarks && window.onPoseDetected) {
+          // Envia os landmarks como JSON para o Flutter
+          const landmarks = results.poseLandmarks.map(lm => ({
+            x: lm.x,
+            y: lm.y,
+            z: lm.z,
+            visibility: lm.visibility
+          }));
+          window.onPoseDetected(JSON.stringify(landmarks));
         }
       });
 
-      // Instead of starting a new camera, we poll for the video element created by Flutter
-      async function detectFrame() {
-        const videoElement = document.querySelector('video');
-        if (videoElement && videoElement.readyState >= 2) {
-          try {
-            await pose.send({image: videoElement});
-          } catch (e) {
-            console.error("MediaPipe Error:", e);
-          }
-        }
-        requestAnimationFrame(detectFrame);
-      }
-
-      detectFrame();
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await pose.send({ image: videoElement });
+        },
+        width: 640,
+        height: 480
+      });
+      camera.start();
     }
   </script>
-
-  <title>TerlineT Treiner</title>
-  <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

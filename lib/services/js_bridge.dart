@@ -1,7 +1,12 @@
-import 'package:js/js.dart';
+import 'dart:js' as js;
 
-@JS('initMediaPipe')
-external void initMediaPipe(dynamic videoElement);
+// Usado apenas na web
+void initMediaPipe(String? videoElementId) {
+  js.context.callMethod('initMediaPipe', [videoElementId]);
+}
 
-@JS('onPoseDetected')
-external set onPoseDetected(void Function(String results) f);
+void setPoseCallback(Function(String) callback) {
+  js.context['onPoseDetected'] = (String landmarksJson) {
+    callback(landmarksJson);
+  };
+}
