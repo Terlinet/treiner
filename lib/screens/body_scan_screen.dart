@@ -67,7 +67,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       _videoElement = html.VideoElement()
         ..id = 'pose-video'
         ..autoplay = true
-        ..playsInline = true
+        ..setAttribute('playsinline', 'true') // Correção aqui
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'cover';
