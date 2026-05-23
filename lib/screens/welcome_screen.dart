@@ -98,11 +98,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             _buildFloatingObject(Icons.timer, 0.15, 0.75, 90, WelcomeScreen.panoOrange, 1.2),
             _buildFloatingObject(Icons.monitor_weight, 0.85, 0.8, 100, Colors.white60, 1.8),
 
-            // Layer 3: The "5D" Hyper-Title
-            Center(child: _buildHyperTitle()),
-
-            // Marketing Banners (NEW)
-            _buildMarketingBanners(),
+            // Layer 3: Main UI Content (Title + Marketing)
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildHyperTitle(),
+                  const SizedBox(height: 30),
+                  _buildMarketingBanners(),
+                ],
+              ),
+            ),
 
             // Layer 4: HUD Overlay
             _buildHUD(),
@@ -250,39 +256,33 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       "PERSONAL TRAINER 5D EXCLUSIVO",
     ];
 
-    return Positioned(
-      top: 150,
-      left: 0,
-      right: 0,
-      child: AnimatedBuilder(
-        animation: _marketingController,
-        builder: (context, child) {
-          final int index = (_marketingController.value * marketingTexts.length).floor();
-          return Opacity(
-            opacity: math.sin(_marketingController.value * math.pi).clamp(0.0, 1.0),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                decoration: BoxDecoration(
-                  color: WelcomeScreen.panoOrange.withOpacity(0.1),
-                  border: Border.symmetric(
-                    horizontal: BorderSide(color: WelcomeScreen.panoOrange.withOpacity(0.5), width: 1),
-                  ),
-                ),
-                child: Text(
-                  marketingTexts[index % marketingTexts.length],
-                  style: GoogleFonts.orbitron(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
-                ),
+    return AnimatedBuilder(
+      animation: _marketingController,
+      builder: (context, child) {
+        final int index = (_marketingController.value * marketingTexts.length).floor();
+        return Opacity(
+          opacity: math.sin(_marketingController.value * math.pi).clamp(0.0, 1.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            decoration: BoxDecoration(
+              color: WelcomeScreen.panoOrange.withOpacity(0.1),
+              border: Border.symmetric(
+                horizontal: BorderSide(color: WelcomeScreen.panoOrange.withOpacity(0.5), width: 1),
               ),
             ),
-          );
-        },
-      ),
+            child: Text(
+              marketingTexts[index % marketingTexts.length],
+              textAlign: TextAlign.center,
+              style: GoogleFonts.orbitron(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
