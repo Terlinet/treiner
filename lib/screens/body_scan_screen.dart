@@ -11,6 +11,10 @@ import 'welcome_screen.dart';
 
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+
 enum CameraStatus { loading, available, denied, notFound, error }
 
 class BodyScanScreen extends StatefulWidget {
@@ -24,21 +28,83 @@ class BodyScanScreen extends StatefulWidget {
 
 class _BodyScanScreenState extends State<BodyScanScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioRecorder _audioRecorder = AudioRecorder();
   CameraController? _cameraController;
   final RepCounter _repCounter = RepCounter();
 
   CameraStatus _cameraStatus = CameraStatus.loading;
-  bool _isListening = false;
+  bool _isRecording = false;
   bool _isProcessing = false;
   String _iaStatus = "SISTEMA INICIANDO";
 
   // URL do seu servidor no Hugging Face
-  final String _hfServerUrl = "https://tertulianoshow-terlinet-treiner.hf.space/query";
+  final String _hfServerUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
   @override
   void initState() {
     super.initState();
     _checkAndInitializeCamera();
+  }
+
+  // Função para iniciar gravação
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final directory = await getTemporaryDirectory();
+        final path = '${directory.path}/audio_query.m4a';
+
+        const config = RecordConfig();
+        await _audioRecorder.start(config, path: path);
+
+        setState(() {
+          _isRecording = true;
+          _iaStatus = "OUVINDO...";
+        });
+      }
+    } catch (e) {
+      print("Erro ao gravar: $e");
+    }
+  }
+
+  // Função para parar e enviar
+  Future<void> _stopAndSend() async {
+    final path = await _audioRecorder.stop();
+    setState(() {
+      _isRecording = false;
+      _isProcessing = true;
+      _iaStatus = "PROCESSANDO VOZ...";
+    });
+
+    if (path != null) {
+      await _sendAudioToIA(File(path));
+    }
+  }
+
+  Future<void> _sendAudioToIA(File audioFile) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$_hfServerUrl/voice_query'));
+      request.fields['modality'] = widget.exercise;
+      request.fields['reps'] = _repCounter.count.toString();
+      request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path));
+
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        var responseData = await response.stream.bytesToString();
+        var data = jsonDecode(responseData);
+
+        if (data['audio'] != null) {
+          setState(() { _iaStatus = "TREINADOR FALANDO"; });
+          await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
+        }
+      }
+    } catch (e) {
+      print("Erro ao enviar áudio: $e");
+    } finally {
+      setState(() {
+        _isProcessing = false;
+        _iaStatus = "AGUARDANDO COMANDO";
+      });
+    }
   }
 
   Future<void> _checkAndInitializeCamera() async {
@@ -196,34 +262,48 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
             ),
           ),
 
-          // Botão de Interação por Voz
+          // Botão de Interação por Voz (Segurar para falar)
           Positioned(
             bottom: 40,
             left: 0,
             right: 0,
             child: Center(
               child: GestureDetector(
-                onTap: () => _speakToIA("Olá treinador, como está minha postura?"),
-                child: Container(
-                  height: 80,
-                  width: 80,
+                onLongPressStart: (_) => _startRecording(),
+                onLongPressEnd: (_) => _stopAndSend(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: _isRecording ? 100 : 80,
+                  width: _isRecording ? 100 : 80,
                   decoration: BoxDecoration(
-                    color: _isProcessing ? Colors.grey : WelcomeScreen.panoOrange,
+                    color: _isRecording ? Colors.redAccent : WelcomeScreen.panoOrange,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: WelcomeScreen.panoOrange.withOpacity(0.5),
-                        blurRadius: 20,
+                        color: (_isRecording ? Colors.red : WelcomeScreen.panoOrange).withOpacity(0.5),
+                        blurRadius: _isRecording ? 40 : 20,
                         spreadRadius: 2,
                       ),
                     ],
                   ),
                   child: Icon(
-                    _isProcessing ? Icons.sync : Icons.mic,
+                    _isProcessing ? Icons.sync : (_isRecording ? Icons.mic : Icons.mic_none),
                     color: Colors.black,
                     size: 40,
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            bottom: 125,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Text(
+                _isRecording ? "SOLTE PARA ENVIAR" : "SEGURE PARA FALAR",
+                style: GoogleFonts.orbitron(color: Colors.white54, fontSize: 10),
               ),
             ),
           ),
