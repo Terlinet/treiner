@@ -126,7 +126,30 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   }
 
   void _welcomeStudent() {
-    _speakToIA("Conexão estabelecida. Sistema de visão pronto para o treino de ${widget.exercise}.");
+    String message = "";
+
+    // Orientações específicas baseadas no exercício
+    switch (widget.exercise) {
+       Apoie o celular em um local firme a cerca de 2 metros. Afaste-se até que eu consiga ver seus pés e cabeça. Mantenha as costas retas e pode começar!';
+        break;
+      case 'ROSCA DIRETA':
+        message = 'Vamos focar no bíceps! Fique de frente para a câmera, a uma distância que eu veja seus braços por inteiro. Evite balançar o corpo durante a subida. Estou pronto!';
+        break;
+      case 'ELEVAÇÃO LATERAL':
+        message = 'Hora de trabalhar os ombros. Posicione-se de frente, mantenha os braços levemente flexionados e suba até a linha dos ombros. Aguardo seu início!';
+        break;
+      case 'SUPINO':
+        message = 'Para o supino, certifique-se de que o celular está em um ângulo que eu veja seu peito e braços. Mantenha o controle na descida. Vamos lá!';
+        break;
+      default:
+        message = 'Iniciando acompanhamento de ${widget.exercise}. Posicione o dispositivo de forma estável para que eu consiga observar seus movimentos. Estou pronto para contar!';
+    }
+
+    setState(() {
+      _iaStatus = "CONFIGURANDO POSIÇÃO";
+    });
+
+    _speakToIA(message);
   }
 
   Future<void> _startRecording() async {
