@@ -86598,7 +86598,7 @@ case 6:case 1:return A.r(q,r)
 case 2:return A.q(o.at(-1),r)}})
 return A.t($async$t6,r)},
 ah7(){this.ah(new A.akC(this))
-this.mg("INICIAR")},
+this.mg("Ol\xe1! Aqui \xe9 a TerlineT. Notei que voc\xea est\xe1 pelo navegador. Para eu te enxergar e desenhar o seu esqueleto, voc\xea precisar\xe1 me instalar no seu celular. Para testarmos minha intelig\xeancia agora, use o bot\xe3o de simular repeti\xe7\xf5es no canto da tela. Vamos ver se eu sei contar?")},
 agM(){var s,r=this
 r.ah(new A.akv(r))
 s=r.r.a
