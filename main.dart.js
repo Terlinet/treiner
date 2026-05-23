@@ -86598,7 +86598,7 @@ case 6:case 1:return A.r(q,r)
 case 2:return A.q(o.at(-1),r)}})
 return A.t($async$t6,r)},
 ah7(){this.ah(new A.akC(this))
-this.mg("INICIAR TREINO")},
+this.mg("INICIAR")},
 agM(){var s,r=this
 r.ah(new A.akv(r))
 s=r.r.a
