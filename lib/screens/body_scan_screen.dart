@@ -15,6 +15,8 @@ import '../utils/pose_painter.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
 
+enum CameraStatus { loading, available, denied, notFound, error }
+
 class BodyScanScreen extends StatefulWidget {
   final String modality;
   final String exercise;
@@ -193,7 +195,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   Widget _buildSyncOverlay() {
     return Container(
-      color: Colors.black90,
+      color: Colors.black.withOpacity(0.9),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -254,7 +256,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               GestureDetector(
                 onLongPressStart: (_) => _startRecording(),
                 onLongPressEnd: (_) => _stopAndSend(),
-                onTap: () { if(_textController.text.isNotEmpty) { _speakToIA(_textController.text); _textController.clear(); } },
                 child: CircleAvatar(radius: 28, backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange, child: Icon(_isProcessing ? Icons.sync : (_textController.text.isEmpty ? Icons.mic : Icons.send), color: Colors.black)),
               ),
             ],
