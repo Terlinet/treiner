@@ -89,10 +89,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       await _cameraController!.initialize();
 
       if (kIsWeb) {
-        // Inicializa MediaPipe no Web enviando o elemento de vídeo
-        // O plugin camera do Flutter Web cria um video element que podemos tentar capturar
-        // Mas por praticidade, o initMediaPipe no JS pode buscar o primeiro video da página
-        initMediaPipe(null);
+        initMediaPipe(null); // Ativa o MediaPipe no navegador
       }
 
       if (mounted) {
@@ -232,14 +229,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       return Container(color: Colors.black);
     }
 
-    final size = MediaQuery.of(context).size;
-    var scale = size.aspectRatio * _cameraController!.value.aspectRatio;
-    if (scale < 1) scale = 1 / scale;
-
-    return Center(
-      child: Transform.scale(
-        scale: scale,
-        child: CameraPreview(_cameraController!),
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: _cameraController!.value.previewSize?.height ?? 1,
+          height: _cameraController!.value.previewSize?.width ?? 1,
+          child: CameraPreview(_cameraController!),
+        ),
       ),
     );
   }

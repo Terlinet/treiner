@@ -44,37 +44,44 @@
   <script>
     // Bridge to send data from JS to Flutter
     window.onPoseDetected = null;
+    let pose = null;
 
-    function initMediaPipe(videoElement) {
-      const pose = new Pose({
+    async function initMediaPipe() {
+      if (pose) return; // Already initialized
+
+      pose = new Pose({
         locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
         }
       });
 
       pose.setOptions({
-        modelComplexity: 1,
+        modelComplexity: 0, // 0 is faster for mobile browsers
         smoothLandmarks: true,
-        enableSegmentation: false,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5
       });
 
       pose.onResults((results) => {
         if (window.onPoseDetected && results.poseLandmarks) {
-          // Send simplified landmarks to Flutter
           window.onPoseDetected(JSON.stringify(results.poseLandmarks));
         }
       });
 
-      const camera = new Camera(videoElement, {
-        onFrame: async () => {
-          await pose.send({image: videoElement});
-        },
-        width: 1280,
-        height: 720
-      });
-      camera.start();
+      // Instead of starting a new camera, we poll for the video element created by Flutter
+      async function detectFrame() {
+        const videoElement = document.querySelector('video');
+        if (videoElement && videoElement.readyState >= 2) {
+          try {
+            await pose.send({image: videoElement});
+          } catch (e) {
+            console.error("MediaPipe Error:", e);
+          }
+        }
+        requestAnimationFrame(detectFrame);
+      }
+
+      detectFrame();
     }
   </script>
 
