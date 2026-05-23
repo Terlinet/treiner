@@ -11,7 +11,6 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
-import '../utils/pose_painter.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
 import '../services/js_bridge.dart' if (dart.library.html) '../services/js_bridge.dart';
@@ -34,6 +33,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   CameraController? _cameraController;
   final RepCounter _repCounter = RepCounter();
 
+  List<dynamic>? _webLandmarks; // Pontos do MediaPipe Web
   CameraStatus _cameraStatus = CameraStatus.loading;
   bool _isRecording = false;
   bool _isProcessing = false;
@@ -49,10 +49,13 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
     if (kIsWeb) {
       onPoseDetected = (String results) {
-        // Lógica para processar pontos vindos do JS
-        // Para simplificar, vamos apenas detectar se há pose
-        if (_isSynced && _iaStatus == "OUVINDO TERLINET") {
-          setState(() { _iaStatus = "ALUNO DETECTADO"; });
+        if (mounted) {
+          setState(() {
+            _webLandmarks = jsonDecode(results);
+            if (_isSynced && _iaStatus == "OUVINDO TERLINET" && _webLandmarks != null) {
+              _iaStatus = "ALUNO DETECTADO";
+            }
+          });
         }
       };
     }
@@ -82,14 +85,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
       _cameraController = CameraController(
         frontCamera,
-        ResolutionPreset.high, // Maior resolução para melhor detecção
+        ResolutionPreset.max, // Usar a melhor resolução possível
         enableAudio: false,
       );
 
       await _cameraController!.initialize();
 
       if (kIsWeb) {
-        initMediaPipe(null); // Ativa o MediaPipe no navegador
+        initMediaPipe(null);
       }
 
       if (mounted) {
@@ -106,7 +109,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _syncSystem() {
     setState(() {
       _isSynced = true;
-      _iaStatus = "OUVINDO TERLINET";
+      _iaStatus = "CONECTANDO À TERLINET";
     });
     _speakToIA("INICIAR");
   }
@@ -184,8 +187,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camada da Câmera (Fills the whole screen)
-          _buildCameraLayer(),
+          // Camada da Câmera + Esqueleto (Web)
+          _buildCameraWithSkeleton(),
 
           if (!_isSynced) _buildSyncOverlay(),
 
@@ -220,7 +223,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     );
   }
 
-  Widget _buildCameraLayer() {
+  Widget _buildCameraWithSkeleton() {
     if (_cameraStatus == CameraStatus.loading) {
       return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
     }
@@ -229,15 +232,25 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       return Container(color: Colors.black);
     }
 
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _cameraController!.value.previewSize?.height ?? 1,
-          height: _cameraController!.value.previewSize?.width ?? 1,
-          child: CameraPreview(_cameraController!),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Câmera usando BoxFit.contain para evitar cortes (Field of View total)
+        FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: _cameraController!.value.previewSize?.height ?? 1,
+            height: _cameraController!.value.previewSize?.width ?? 1,
+            child: CameraPreview(_cameraController!),
+          ),
         ),
-      ),
+        // Desenho do Esqueleto para Web
+        if (kIsWeb && _webLandmarks != null)
+          CustomPaint(
+            painter: WebPosePainter(_webLandmarks!),
+            size: Size.infinite,
+          ),
+      ],
     );
   }
 
@@ -320,7 +333,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               GestureDetector(
                 onLongPressStart: (_) => _startRecording(),
                 onLongPressEnd: (_) => _stopAndSend(),
-                onTap: () { if(_textController.text.isNotEmpty) { _speakToIA(_textController.text); _textController.clear(); } },
                 child: CircleAvatar(
                   radius: 28,
                   backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange,
@@ -347,4 +359,29 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       Text(value, style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
     ]);
   }
+}
+
+class WebPosePainter extends CustomPainter {
+  final List<dynamic> landmarks;
+  WebPosePainter(this.landmarks);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = WelcomeScreen.panoOrange
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.fill;
+
+    for (var landmark in landmarks) {
+      if (landmark['visibility'] > 0.5) {
+        // MediaPipe retorna 0.0 a 1.0, convertemos para o tamanho da tela
+        double x = landmark['x'] * size.width;
+        double y = landmark['y'] * size.height;
+        canvas.drawCircle(Offset(x, y), 5, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(WebPosePainter oldDelegate) => true;
 }
