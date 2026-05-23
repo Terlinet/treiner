@@ -2,6 +2,7 @@ import 'dart:js' as js;
 
 // Usado apenas na web
 void initMediaPipe(String? videoElementId) {
+  if (videoElementId == null) return;
   js.context.callMethod('initMediaPipe', [videoElementId]);
 }
 

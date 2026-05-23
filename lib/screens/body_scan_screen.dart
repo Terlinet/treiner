@@ -1,14 +1,11 @@
 import 'dart:convert';
-import 'dart:math' as math;
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
-import 'package:camera/camera.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../services/js_bridge.dart' as bridge;
 import 'welcome_screen.dart';
-import 'dart:html' as html;
 
 enum CameraStatus { loading, available, denied, error }
 
@@ -24,55 +21,91 @@ class BodyScanScreen extends StatefulWidget {
 class _BodyScanScreenState extends State<BodyScanScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final TextEditingController _textController = TextEditingController();
-  CameraController? _cameraController;
 
-  // Landmarks vindos do MediaPipe (via JS)
+  html.VideoElement? _videoElement;
+  html.MediaStream? _mediaStream;
   List<dynamic> _landmarks = [];
-
   CameraStatus _cameraStatus = CameraStatus.loading;
   bool _isSynced = false;
   bool _isProcessing = false;
   String _iaStatus = "SISTEMA INICIANDO";
   int _reps = 0;
 
-  // Lógica de contagem de agachamento
-  bool _isSquatting = false;   // se está na posição de agachamento
+  // Estados para contagem de agachamento
+  bool _isSquatting = false;
 
   final String _apiBaseUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    _initCameraWeb();
     _setupPoseCallback();
   }
 
   @override
   void dispose() {
-    _cameraController?.dispose();
+    _stopCamera();
     _audioPlayer.dispose();
     _textController.dispose();
     super.dispose();
   }
 
-  Future<void> _initCamera() async {
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
-      setState(() => _cameraStatus = CameraStatus.error);
-      return;
+  // Inicializa a câmera usando a API nativa do navegador
+  Future<void> _initCameraWeb() async {
+    try {
+      final mediaDevices = html.window.navigator.mediaDevices;
+      if (mediaDevices == null) {
+        setState(() => _cameraStatus = CameraStatus.error);
+        return;
+      }
+      final stream = await mediaDevices.getUserMedia({
+        'video': {'facingMode': 'user'},
+        'audio': false
+      });
+      _mediaStream = stream;
+      _videoElement = html.VideoElement()
+        ..id = 'pose-video'
+        ..autoplay = true
+        ..playsInline = true
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+      _videoElement!.srcObject = stream;
+      await _videoElement!.play();
+
+      // Adiciona o vídeo ao corpo do documento
+      html.document.body!.append(_videoElement!);
+
+      if (mounted) {
+        setState(() {
+          _cameraStatus = CameraStatus.available;
+          _iaStatus = "CÂMERA ATIVA - AGUARDANDO SINCRONIZAÇÃO";
+        });
+      }
+      // Aguarda o vídeo estabilizar e inicia o MediaPipe
+      await Future.delayed(const Duration(milliseconds: 500));
+      _startMediaPipe();
+    } catch (e) {
+      print("Erro ao acessar câmera: $e");
+      if (mounted) {
+        setState(() {
+          _cameraStatus = CameraStatus.error;
+          _iaStatus = "ERRO: PERMISSÃO DA CÂMERA NEGADA";
+        });
+      }
     }
-    final frontCamera = cameras.firstWhere(
-      (cam) => cam.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-    _cameraController = CameraController(frontCamera, ResolutionPreset.medium);
-    await _cameraController!.initialize();
-    if (mounted) {
-      setState(() => _cameraStatus = CameraStatus.available);
+  }
+
+  void _stopCamera() {
+    if (_mediaStream != null) {
+      _mediaStream!.getTracks().forEach((track) => track.stop());
+      _mediaStream = null;
     }
-    // Aguarda um frame para obter o ID do vídeo (web)
-    await Future.delayed(const Duration(milliseconds: 500));
-    _startMediaPipe();
+    if (_videoElement != null) {
+      _videoElement!.remove();
+      _videoElement = null;
+    }
   }
 
   void _setupPoseCallback() {
@@ -88,20 +121,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   }
 
   void _startMediaPipe() {
-    Future.delayed(const Duration(milliseconds: 300), () {
-      try {
-        final videoElement = html.document.querySelector('video');
-        if (videoElement != null) {
-          bridge.initMediaPipe(videoElement.id);
-        } else {
-          print("Elemento de vídeo não encontrado");
-        }
-      } catch (e) {
-        print("Erro ao iniciar MediaPipe: $e");
-      }
-    });
+    if (_videoElement != null && _videoElement!.id == 'pose-video') {
+      bridge.initMediaPipe(_videoElement!.id);
+    } else {
+      print("Elemento de vídeo não disponível para MediaPipe");
+    }
   }
 
+  // Contagem de agachamento baseada nos pontos do quadril e joelhos
   void _countSquat(List<dynamic> landmarks) {
     if (landmarks.isEmpty || landmarks.length < 27) return;
 
@@ -113,12 +140,13 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double rightKneeY = landmarks[26]['y'];
     double kneeY = (leftKneeY + rightKneeY) / 2;
 
+    // Detecta se está agachado (joelho mais baixo que o quadril)
     bool currentlySquatting = kneeY > hipY + 0.1;
 
     if (currentlySquatting && !_isSquatting) {
-      _isSquatting = true;
+      _isSquatting = true; // iniciou descida
     } else if (!currentlySquatting && _isSquatting) {
-      _isSquatting = false;
+      _isSquatting = false; // completou subida
       setState(() {
         _reps++;
       });
@@ -161,7 +189,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         setState(() => _iaStatus = "TERLINET FALANDO");
         if (data['audio'] != null) {
           await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
+        } else if (data['text'] != null) {
+          setState(() => _iaStatus = data['text']);
         }
+      } else {
+        setState(() => _iaStatus = "ERRO NA IA");
       }
     } catch (e) {
       setState(() => _iaStatus = "ERRO DE CONEXÃO");
@@ -184,8 +216,23 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          _buildCameraWithSkeleton(),
+          // O vídeo está sendo exibido diretamente no DOM, atrás do Flutter
+          if (_cameraStatus == CameraStatus.available)
+            Container(color: Colors.transparent),
+
+          // Desenho do esqueleto sobre o vídeo
+          if (_landmarks.isNotEmpty && _isSynced)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: PosePainter(_landmarks, MediaQuery.of(context).size),
+                size: MediaQuery.of(context).size,
+              ),
+            ),
+
+          // Overlay de sincronização
           if (!_isSynced) _buildSyncOverlay(),
+
+          // HUD superior
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 20,
@@ -198,7 +245,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ],
             ),
           ),
+
+          // Painel de interação
           if (_isSynced) _buildInteractionPanel(),
+
+          // Botão voltar
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 10,
@@ -209,23 +260,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildCameraWithSkeleton() {
-    if (_cameraStatus != CameraStatus.available || _cameraController == null) {
-      return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
-    }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        CameraPreview(_cameraController!),
-        if (_landmarks.isNotEmpty)
-          CustomPaint(
-            painter: PosePainter(_landmarks),
-            size: Size.infinite,
-          ),
-      ],
     );
   }
 
@@ -334,7 +368,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
 class PosePainter extends CustomPainter {
   final List<dynamic> landmarks;
-  PosePainter(this.landmarks);
+  final Size screenSize;
+  PosePainter(this.landmarks, this.screenSize);
 
   static const List<List<int>> connections = [
     [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
@@ -348,37 +383,32 @@ class PosePainter extends CustomPainter {
 
     final paintLine = Paint()
       ..color = WelcomeScreen.panoOrange
-      ..strokeWidth = 3.0
+      ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke;
 
     final paintPoint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
 
+    Offset getOffset(dynamic lm) {
+      double x = (1.0 - (lm['x'] as num).toDouble()) * screenSize.width;
+      double y = (lm['y'] as num).toDouble() * screenSize.height;
+      return Offset(x, y);
+    }
+
     for (var conn in connections) {
       if (conn[0] < landmarks.length && conn[1] < landmarks.length) {
-        final p1 = _getOffset(landmarks[conn[0]], size);
-        final p2 = _getOffset(landmarks[conn[1]], size);
-        if (p1 != null && p2 != null) {
-          canvas.drawLine(p1, p2, paintLine);
-        }
+        final p1 = getOffset(landmarks[conn[0]]);
+        final p2 = getOffset(landmarks[conn[1]]);
+        canvas.drawLine(p1, p2, paintLine);
       }
     }
 
     for (var lm in landmarks) {
-      final offset = _getOffset(lm, size);
-      if (offset != null) {
-        canvas.drawCircle(offset, 4, paintPoint);
+      if (lm['visibility'] > 0.5) {
+        canvas.drawCircle(getOffset(lm), 4, paintPoint);
       }
     }
-  }
-
-  Offset? _getOffset(dynamic lm, Size size) {
-    if (lm == null) return null;
-    final double x = (lm['x'] as num).toDouble() * size.width;
-    final double y = (lm['y'] as num).toDouble() * size.height;
-    if (lm['visibility'] != null && (lm['visibility'] as num) < 0.5) return null;
-    return Offset(x, y);
   }
 
   @override
