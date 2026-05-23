@@ -235,20 +235,23 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Câmera usando BoxFit.contain para evitar cortes (Field of View total)
-        FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: _cameraController!.value.previewSize?.height ?? 1,
-            height: _cameraController!.value.previewSize?.width ?? 1,
-            child: CameraPreview(_cameraController!),
+        // Câmera em FULL SCREEN total usando BoxFit.cover
+        SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _cameraController!.value.previewSize?.height ?? 1,
+              height: _cameraController!.value.previewSize?.width ?? 1,
+              child: CameraPreview(_cameraController!),
+            ),
           ),
         ),
         // Desenho do Esqueleto para Web
         if (kIsWeb && _webLandmarks != null)
-          CustomPaint(
-            painter: WebPosePainter(_webLandmarks!),
-            size: Size.infinite,
+          Positioned.fill(
+            child: CustomPaint(
+              painter: WebPosePainter(_webLandmarks!),
+            ),
           ),
       ],
     );
