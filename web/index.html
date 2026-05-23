@@ -41,6 +41,43 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
+  <script>
+    // Bridge to send data from JS to Flutter
+    window.onPoseDetected = null;
+
+    function initMediaPipe(videoElement) {
+      const pose = new Pose({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        }
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      pose.onResults((results) => {
+        if (window.onPoseDetected && results.poseLandmarks) {
+          // Send simplified landmarks to Flutter
+          window.onPoseDetected(JSON.stringify(results.poseLandmarks));
+        }
+      });
+
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await pose.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+      });
+      camera.start();
+    }
+  </script>
+
   <title>TerlineT Treiner</title>
   <link rel="manifest" href="manifest.json">
 </head>

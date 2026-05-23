@@ -14,6 +14,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../utils/pose_painter.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:math' as math;
+import '../services/js_bridge.dart' if (dart.library.html) '../services/js_bridge.dart';
 
 enum CameraStatus { loading, available, denied, notFound, error }
 
@@ -45,6 +46,16 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void initState() {
     super.initState();
     _checkAndInitializeCamera();
+
+    if (kIsWeb) {
+      onPoseDetected = (String results) {
+        // Lógica para processar pontos vindos do JS
+        // Para simplificar, vamos apenas detectar se há pose
+        if (_isSynced && _iaStatus == "OUVINDO TERLINET") {
+          setState(() { _iaStatus = "ALUNO DETECTADO"; });
+        }
+      };
+    }
   }
 
   @override
@@ -64,8 +75,25 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         return;
       }
 
-      _cameraController = CameraController(cameras.first, ResolutionPreset.medium, enableAudio: false);
+      final frontCamera = cameras.firstWhere(
+        (cam) => cam.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      _cameraController = CameraController(
+        frontCamera,
+        ResolutionPreset.high, // Maior resolução para melhor detecção
+        enableAudio: false,
+      );
+
       await _cameraController!.initialize();
+
+      if (kIsWeb) {
+        // Inicializa MediaPipe no Web enviando o elemento de vídeo
+        // O plugin camera do Flutter Web cria um video element que podemos tentar capturar
+        // Mas por praticidade, o initMediaPipe no JS pode buscar o primeiro video da página
+        initMediaPipe(null);
+      }
 
       if (mounted) {
         setState(() {
@@ -81,12 +109,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _syncSystem() {
     setState(() {
       _isSynced = true;
-      _iaStatus = "CONECTANDO À TERLINET";
+      _iaStatus = "OUVINDO TERLINET";
     });
     _speakToIA("INICIAR");
   }
 
-  // Simulação para o Chrome
   void _simulateMovement() {
     setState(() {
       _repCounter.count++;
@@ -160,12 +187,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
+          // Camada da Câmera (Fills the whole screen)
           _buildCameraLayer(),
+
           if (!_isSynced) _buildSyncOverlay(),
 
           // HUD Superior
           Positioned(
-            top: 50,
+            top: MediaQuery.of(context).padding.top + 10,
             left: 20,
             right: 20,
             child: Row(
@@ -181,16 +210,38 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           if (_isSynced) _buildInteractionPanel(),
 
           // Botão Sair
-          Positioned(top: 50, left: 20, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 10,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+              onPressed: () => Navigator.pop(context)
+            )
+          ),
         ],
       ),
     );
   }
 
   Widget _buildCameraLayer() {
-    if (_cameraStatus == CameraStatus.loading) return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return Container(color: Colors.black);
-    return CameraPreview(_cameraController!);
+    if (_cameraStatus == CameraStatus.loading) {
+      return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
+    }
+
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return Container(color: Colors.black);
+    }
+
+    final size = MediaQuery.of(context).size;
+    var scale = size.aspectRatio * _cameraController!.value.aspectRatio;
+    if (scale < 1) scale = 1 / scale;
+
+    return Center(
+      child: Transform.scale(
+        scale: scale,
+        child: CameraPreview(_cameraController!),
+      ),
+    );
   }
 
   Widget _buildSyncOverlay() {
@@ -208,7 +259,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: _syncSystem,
-              style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: WelcomeScreen.panoOrange,
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+              ),
               child: const Text("INICIAR TREINO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
           ],
@@ -219,7 +274,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   Widget _buildInteractionPanel() {
     return Positioned(
-      bottom: 20,
+      bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       left: 20,
       right: 20,
       child: Column(
@@ -228,7 +283,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           // Status IA
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.black87, border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.3)), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.8),
+              border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(10)
+            ),
             child: Column(
               children: [
                 Text(_iaStatus, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -243,12 +302,20 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(30), border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.5))),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.5))
+                  ),
                   child: TextField(
                     controller: _textController,
                     onSubmitted: (val) { if(val.isNotEmpty) { _speakToIA(val); _textController.clear(); } },
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(hintText: "Digite algo para a TerlineT...", hintStyle: TextStyle(color: Colors.white24), border: InputBorder.none),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: "Fale com a TerlineT...",
+                      hintStyle: TextStyle(color: Colors.white24, fontSize: 12),
+                      border: InputBorder.none
+                    ),
                   ),
                 ),
               ),
@@ -256,13 +323,21 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               GestureDetector(
                 onLongPressStart: (_) => _startRecording(),
                 onLongPressEnd: (_) => _stopAndSend(),
-                child: CircleAvatar(radius: 28, backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange, child: Icon(_isProcessing ? Icons.sync : (_textController.text.isEmpty ? Icons.mic : Icons.send), color: Colors.black)),
+                onTap: () { if(_textController.text.isNotEmpty) { _speakToIA(_textController.text); _textController.clear(); } },
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange,
+                  child: Icon(_isProcessing ? Icons.sync : (_textController.text.isEmpty ? Icons.mic : Icons.send), color: Colors.black)
+                ),
               ),
             ],
           ),
           if (kIsWeb) Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: TextButton(onPressed: _simulateMovement, child: const Text("SIMULAR REPETIÇÃO (TESTE WEB)", style: TextStyle(color: Colors.white24, fontSize: 10))),
+            child: TextButton(
+              onPressed: _simulateMovement,
+              child: const Text("SIMULAR REPETIÇÃO (TESTE WEB)", style: TextStyle(color: Colors.white24, fontSize: 10))
+            ),
           ),
         ],
       ),
