@@ -5,18 +5,43 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>TerlineT Treiner</title>
+  <!-- MediaPipe Pose -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: black;
+    }
+    /* O vídeo será posicionado absolutamente atrás do canvas do Flutter */
+    #pose-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+    /* Garante que o canvas do Flutter fique sobre o vídeo */
+    flutter-view {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
   <script>
-    // Ponte global para enviar landmarks para o Flutter
-    window.onPoseDetected = null;
-
+    // Função que será chamada pelo Dart para iniciar o MediaPipe
     function initMediaPipe(videoElementId) {
-      console.log("Inicializando MediaPipe para o elemento:", videoElementId);
-      const videoElement = document.getElementById(videoElementId) || document.querySelector('video');
-
+      const videoElement = document.getElementById(videoElementId);
       if (!videoElement) {
-        console.error("Elemento de vídeo não encontrado");
+        console.error("Elemento de vídeo não encontrado:", videoElementId);
         return;
       }
 
@@ -34,7 +59,7 @@
 
       pose.onResults((results) => {
         if (results.poseLandmarks && window.onPoseDetected) {
-          // Envia os landmarks como JSON para o Flutter
+          // Converte os landmarks para um formato simples (x, y, z, visibility)
           const landmarks = results.poseLandmarks.map(lm => ({
             x: lm.x,
             y: lm.y,
@@ -55,8 +80,6 @@
       camera.start();
     }
   </script>
-</head>
-<body>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
