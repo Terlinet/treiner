@@ -72319,11 +72319,11 @@ return A.t($async$ph,r)},
 a5E(){this.aq(new A.abc(this))
 this.a6S()},
 a6S(){var s,r=this.a.d
-switch(r){case"AGACHAMENTO":s="Ol\xe1! Para o agachamento, apoie o celular a 2 metros de dist\xe2ncia. Eu preciso ver seus p\xe9s e cabe\xe7a. Pode come\xe7ar quando estiver pronto!"
+switch(r){case"AGACHAMENTO":s="Ol\xe1! Aqui \xe9 a TerlineT. Para o agachamento, apoie o seu celular em um local firme a cerca de dois metros de dist\xe2ncia. Afaste-se at\xe9 que eu consiga visualizar seus p\xe9s e sua cabe\xe7a perfeitamente. Assim que eu te enxergar por inteiro, come\xe7arei a contar seus movimentos. Pode ir se posicionando!"
 break
-case"ROSCA DIRETA":s="B\xedceps em foco! Fique de frente para a c\xe2mera e mostre seus bra\xe7os por inteiro. Evite balan\xe7ar o tronco. Vamos l\xe1!"
+case"ROSCA DIRETA":s="Oi! Sou a TerlineT e vou acompanhar seus b\xedceps. Posicione o celular e afaste-se um pouco para que eu veja seus bra\xe7os e tronco por completo. Tente n\xe3o balan\xe7ar o corpo na subida. Quando estiver pronto, \xe9 s\xf3 come\xe7ar!"
 break
-default:s="Iniciando treino de "+r+". Posicione o celular de forma est\xe1vel para eu observar seus movimentos!"}this.n8(s)},
+default:s="Ol\xe1, sou a TerlineT! Para come\xe7armos o treino de "+r+", posicione seu dispositivo de forma est\xe1vel e afaste-se o suficiente para que eu veja seu corpo inteiro. Estou pronta para observar e contar seus movimentos!"}this.n8(s)},
 a5n(){var s,r=this
 r.aq(new A.ab5(r))
 s=r.r.a
