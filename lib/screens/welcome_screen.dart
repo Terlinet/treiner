@@ -21,6 +21,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
   late AnimationController _mainController;
   late AnimationController _glitchController;
+  late AnimationController _marketingController;
   late VideoPlayerController _videoController;
   Offset _mousePos = Offset.zero;
   bool _videoInitialized = false;
@@ -37,6 +38,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       duration: const Duration(milliseconds: 500),
       vsync: this,
     )..repeat(reverse: true);
+
+    _marketingController = AnimationController(
+      duration: const Duration(seconds: 4),
+      vsync: this,
+    )..repeat();
 
     _initializeVideo();
   }
@@ -60,6 +66,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   void dispose() {
     _mainController.dispose();
     _glitchController.dispose();
+    _marketingController.dispose();
     _videoController.dispose();
     super.dispose();
   }
@@ -93,6 +100,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
             // Layer 3: The "5D" Hyper-Title
             Center(child: _buildHyperTitle()),
+
+            // Marketing Banners (NEW)
+            _buildMarketingBanners(),
 
             // Layer 4: HUD Overlay
             _buildHUD(),
@@ -229,6 +239,50 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           }),
         );
       },
+    );
+  }
+
+  Widget _buildMarketingBanners() {
+    final List<String> marketingTexts = [
+      "TREINE COM INTELIGÊNCIA ARTIFICIAL",
+      "VISÃO COMPUTACIONAL EM TEMPO REAL",
+      "CORREÇÃO DE POSTURA INSTANTÂNEA",
+      "PERSONAL TRAINER 5D EXCLUSIVO",
+    ];
+
+    return Positioned(
+      top: 150,
+      left: 0,
+      right: 0,
+      child: AnimatedBuilder(
+        animation: _marketingController,
+        builder: (context, child) {
+          final int index = (_marketingController.value * marketingTexts.length).floor();
+          return Opacity(
+            opacity: math.sin(_marketingController.value * math.pi).clamp(0.0, 1.0),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: WelcomeScreen.panoOrange.withOpacity(0.1),
+                  border: Border.symmetric(
+                    horizontal: BorderSide(color: WelcomeScreen.panoOrange.withOpacity(0.5), width: 1),
+                  ),
+                ),
+                child: Text(
+                  marketingTexts[index % marketingTexts.length],
+                  style: GoogleFonts.orbitron(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
