@@ -4,16 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:audioplayers/audioplayers.dart';
 import 'welcome_screen.dart';
-
 import 'package:camera/camera.dart';
 import '../utils/pose_utils.dart';
-import 'welcome_screen.dart';
-
 import 'package:permission_handler/permission_handler.dart';
-
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../utils/pose_painter.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
 
 enum CameraStatus { loading, available, denied, notFound, error }
 
@@ -32,30 +32,110 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   CameraController? _cameraController;
   final RepCounter _repCounter = RepCounter();
 
+  // Pose Detection
+  late final PoseDetector _poseDetector;
+  bool _isBusy = false;
+  CustomPaint? _customPaint;
+
   CameraStatus _cameraStatus = CameraStatus.loading;
   bool _isRecording = false;
   bool _isProcessing = false;
   String _iaStatus = "SISTEMA INICIANDO";
 
-  // URL do seu servidor no Hugging Face
   final String _hfServerUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
   @override
   void initState() {
     super.initState();
+    _poseDetector = PoseDetector(options: PoseDetectorOptions());
     _checkAndInitializeCamera();
   }
 
-  // Função para iniciar gravação
+  @override
+  void dispose() {
+    _poseDetector.close();
+    _cameraController?.dispose();
+    _audioPlayer.dispose();
+    _audioRecorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkAndInitializeCamera() async {
+    try {
+      if (kIsWeb) {
+        final cameras = await availableCameras();
+        if (cameras.isEmpty) {
+          setState(() { _cameraStatus = CameraStatus.notFound; });
+          return;
+        }
+        _cameraController = CameraController(cameras.first, ResolutionPreset.medium);
+        await _cameraController!.initialize();
+        setState(() {
+          _cameraStatus = CameraStatus.available;
+          _iaStatus = "WEB MODE (SKELETON EM MOBILE)";
+        });
+        return;
+      }
+
+      final status = await Permission.camera.request();
+      if (status.isDenied) {
+        setState(() { _cameraStatus = CameraStatus.denied; });
+        return;
+      }
+
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        setState(() { _cameraStatus = CameraStatus.notFound; });
+        return;
+      }
+
+      _cameraController = CameraController(
+        cameras.first,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+
+      await _cameraController!.initialize();
+      _cameraController!.startImageStream(_processCameraImage);
+
+      if (mounted) {
+        setState(() {
+          _cameraStatus = CameraStatus.available;
+          _iaStatus = "SCANNER ATIVO";
+        });
+        _welcomeStudent();
+      }
+    } catch (e) {
+      setState(() { _cameraStatus = CameraStatus.error; });
+    }
+  }
+
+  Future<void> _processCameraImage(CameraImage image) async {
+    if (_isBusy) return;
+    _isBusy = true;
+
+    try {
+      // Implementação real exigiria InputImage.fromBytes para Mobile
+      // poses = await _poseDetector.processImage(inputImage);
+      if (mounted) setState(() {});
+    } catch (e) {
+      print("Erro no processamento: $e");
+    } finally {
+      _isBusy = false;
+    }
+  }
+
+  void _welcomeStudent() {
+    _speakToIA("Conexão estabelecida. Sistema de visão pronto para o treino de ${widget.exercise}.");
+  }
+
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
         final directory = await getTemporaryDirectory();
         final path = '${directory.path}/audio_query.m4a';
-
         const config = RecordConfig();
         await _audioRecorder.start(config, path: path);
-
         setState(() {
           _isRecording = true;
           _iaStatus = "OUVINDO...";
@@ -66,7 +146,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     }
   }
 
-  // Função para parar e enviar
   Future<void> _stopAndSend() async {
     final path = await _audioRecorder.stop();
     setState(() {
@@ -74,7 +153,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       _isProcessing = true;
       _iaStatus = "PROCESSANDO VOZ...";
     });
-
     if (path != null) {
       await _sendAudioToIA(File(path));
     }
@@ -91,7 +169,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
         var data = jsonDecode(responseData);
-
         if (data['audio'] != null) {
           setState(() { _iaStatus = "TREINADOR FALANDO"; });
           await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
@@ -107,73 +184,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     }
   }
 
-  Future<void> _checkAndInitializeCamera() async {
-    try {
-      // 1. Solicitar permissão de câmera
-      final status = await Permission.camera.request();
-
-      if (status.isDenied || status.isPermanentlyDenied) {
-        setState(() {
-          _cameraStatus = CameraStatus.denied;
-          _iaStatus = "ACESSO NEGADO";
-        });
-        return;
-      }
-
-      // 2. Verificar hardware
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        setState(() {
-          _cameraStatus = CameraStatus.notFound;
-          _iaStatus = "CÂMERA NÃO DETECTADA";
-        });
-        return;
-      }
-
-      // 3. Inicializar
-      _cameraController = CameraController(
-        cameras.first,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-
-      await _cameraController!.initialize();
-
-      if (mounted) {
-        setState(() {
-          _cameraStatus = CameraStatus.available;
-          _iaStatus = "SCANNER ATIVO";
-        });
-        _welcomeStudent();
-      }
-    } catch (e) {
-      setState(() {
-        _cameraStatus = CameraStatus.error;
-        _iaStatus = "ERRO DE HARDWARE";
-      });
-    }
-  }
-
-  void _welcomeStudent() {
-    _speakToIA("Conexão estabelecida. Sistema de visão pronto para o treino de ${widget.exercise}.");
-  }
-
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
   Future<void> _speakToIA(String userText) async {
     setState(() {
       _isProcessing = true;
       _iaStatus = "IA PENSANDO...";
     });
-
     try {
       final response = await http.post(
-        Uri.parse(_hfServerUrl),
+        Uri.parse('$_hfServerUrl/query'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "text": userText,
@@ -181,15 +199,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           "reps": _repCounter.count,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final String? audioBase64 = data['audio'];
-
-        setState(() {
-          _iaStatus = "TREINADOR FALANDO";
-        });
-
+        setState(() { _iaStatus = "TREINADOR FALANDO"; });
         if (audioBase64 != null) {
           await _audioPlayer.play(BytesSource(base64Decode(audioBase64)));
         }
@@ -210,10 +223,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camada da Câmera com Estados de Erro
           _buildCameraLayer(),
-
-          // HUD Superior
           Positioned(
             top: 50,
             left: 20,
@@ -226,8 +236,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ],
             ),
           ),
-
-          // Painel de Status da IA (Visual Panobianco)
           Positioned(
             bottom: 150,
             left: 30,
@@ -261,8 +269,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ),
             ),
           ),
-
-          // Botão de Interação por Voz (Segurar para falar)
           Positioned(
             bottom: 40,
             left: 0,
@@ -295,7 +301,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ),
             ),
           ),
-
           Positioned(
             bottom: 125,
             left: 0,
@@ -307,8 +312,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ),
             ),
           ),
-
-          // Botão Sair
           Positioned(
             top: 50,
             left: 20,
@@ -326,21 +329,21 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     if (_cameraStatus == CameraStatus.loading) {
       return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
     }
-
     if (_cameraStatus == CameraStatus.denied) {
       return _buildErrorState(Icons.lock_outline, "PERMISSÃO NEGADA", "Ative a câmera nas configurações.");
     }
-
     if (_cameraStatus == CameraStatus.notFound) {
       return _buildErrorState(Icons.videocam_off_outlined, "CÂMERA NÃO ENCONTRADA", "Conecte uma câmera para treinar.");
     }
-
     if (_cameraStatus == CameraStatus.error || _cameraController == null) {
       return _buildErrorState(Icons.error_outline, "ERRO NO SISTEMA", "Reinicie o aplicativo.");
     }
-
-    return SizedBox.expand(
-      child: CameraPreview(_cameraController!),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CameraPreview(_cameraController!),
+        if (_customPaint != null) _customPaint!,
+      ],
     );
   }
 
@@ -364,22 +367,13 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       ),
     );
   }
+
   Widget _buildStatTile(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.orbitron(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(label, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10)),
+        Text(value, style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
       ],
     );
   }
