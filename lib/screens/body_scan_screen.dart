@@ -118,13 +118,13 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     String message = "";
     switch (widget.exercise) {
       case 'AGACHAMENTO':
-        message = 'Olá! Para o agachamento, apoie o celular a 2 metros de distância. Eu preciso ver seus pés e cabeça. Pode começar quando estiver pronto!';
+        message = 'Olá! Aqui é a TerlineT. Para o agachamento, apoie o seu celular em um local firme a cerca de dois metros de distância. Afaste-se até que eu consiga visualizar seus pés e sua cabeça perfeitamente. Assim que eu te enxergar por inteiro, começarei a contar seus movimentos. Pode ir se posicionando!';
         break;
       case 'ROSCA DIRETA':
-        message = 'Bíceps em foco! Fique de frente para a câmera e mostre seus braços por inteiro. Evite balançar o tronco. Vamos lá!';
+        message = 'Oi! Sou a TerlineT e vou acompanhar seus bíceps. Posicione o celular e afaste-se um pouco para que eu veja seus braços e tronco por completo. Tente não balançar o corpo na subida. Quando estiver pronto, é só começar!';
         break;
       default:
-        message = 'Iniciando treino de ${widget.exercise}. Posicione o celular de forma estável para eu observar seus movimentos!';
+        message = 'Olá, sou a TerlineT! Para começarmos o treino de ${widget.exercise}, posicione seu dispositivo de forma estável e afaste-se o suficiente para que eu veja seu corpo inteiro. Estou pronta para observar e contar seus movimentos!';
     }
     _speakToIA(message);
   }
