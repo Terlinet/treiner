@@ -72318,12 +72318,11 @@ case 2:return A.q(o.at(-1),r)}})
 return A.t($async$ph,r)},
 a5E(){this.aq(new A.abc(this))
 this.a6S()},
-a6S(){var s,r=this.a.d
-switch(r){case"AGACHAMENTO":s="Ol\xe1! Aqui \xe9 a TerlineT. Para o agachamento, apoie o seu celular em um local firme a cerca de dois metros de dist\xe2ncia. Afaste-se at\xe9 que eu consiga visualizar seus p\xe9s e sua cabe\xe7a perfeitamente. Assim que eu te enxergar por inteiro, come\xe7arei a contar seus movimentos. Pode ir se posicionando!"
+a6S(){switch(this.a.d){case"AGACHAMENTO":var s="Ol\xe1! Tudo bem a\xed? Aqui \xe9 a TerlineT. Para iniciarmos o agachamento, eu preciso que voc\xea se afaste para eu poder enxergar todos os seus movimentos, dos p\xe9s \xe0 cabe\xe7a. Deixe o som do seu dispositivo no m\xe1ximo para conseguir me ouvir orientando e contando as suas repeti\xe7\xf5es. Assim que voc\xea se posicionar e eu te enxergar por inteiro, come\xe7amos!"
 break
-case"ROSCA DIRETA":s="Oi! Sou a TerlineT e vou acompanhar seus b\xedceps. Posicione o celular e afaste-se um pouco para que eu veja seus bra\xe7os e tronco por completo. Tente n\xe3o balan\xe7ar o corpo na subida. Quando estiver pronto, \xe9 s\xf3 come\xe7ar!"
+case"ROSCA DIRETA":s="Oi! Tudo certo para o treino? Sou a TerlineT. Para eu acompanhar sua rosca direta, por favor, afaste-se um pouco para que eu veja seus bra\xe7os e tronco claramente. Aumente o som do celular para ouvir minhas dicas de postura e a contagem. Estou pronta para observar voc\xea!"
 break
-default:s="Ol\xe1, sou a TerlineT! Para come\xe7armos o treino de "+r+", posicione seu dispositivo de forma est\xe1vel e afaste-se o suficiente para que eu veja seu corpo inteiro. Estou pronta para observar e contar seus movimentos!"}this.n8(s)},
+default:s="Ol\xe1! Tudo bem? Sou a TerlineT. Para come\xe7armos este exerc\xedcio, posicione o dispositivo de forma est\xe1vel e afaste-se para que eu veja seu corpo inteiro. N\xe3o esque\xe7a de deixar o volume no m\xe1ximo para me ouvir contando seus movimentos. Vamos nessa!"}this.n8(s)},
 a5n(){var s,r=this
 r.aq(new A.ab5(r))
 s=r.r.a
