@@ -130,7 +130,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
     // Orientações específicas baseadas no exercício
     switch (widget.exercise) {
-       Apoie o celular em um local firme a cerca de 2 metros. Afaste-se até que eu consiga ver seus pés e cabeça. Mantenha as costas retas e pode começar!';
+      case 'AGACHAMENTO':
+        message = 'Apoie o celular em um local firme a cerca de 2 metros. Afaste-se até que eu consiga ver seus pés e cabeça. Mantenha as costas retas e pode começar!';
         break;
       case 'ROSCA DIRETA':
         message = 'Vamos focar no bíceps! Fique de frente para a câmera, a uma distância que eu veja seus braços por inteiro. Evite balançar o corpo durante a subida. Estou pronto!';
