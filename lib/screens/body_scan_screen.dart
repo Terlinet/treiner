@@ -118,13 +118,13 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     String message = "";
     switch (widget.exercise) {
       case 'AGACHAMENTO':
-        message = 'Olá! Aqui é a TerlineT. Para o agachamento, apoie o seu celular em um local firme a cerca de dois metros de distância. Afaste-se até que eu consiga visualizar seus pés e sua cabeça perfeitamente. Assim que eu te enxergar por inteiro, começarei a contar seus movimentos. Pode ir se posicionando!';
+        message = 'Olá! Tudo bem aí? Aqui é a TerlineT. Para iniciarmos o agachamento, eu preciso que você se afaste para eu poder enxergar todos os seus movimentos, dos pés à cabeça. Deixe o som do seu dispositivo no máximo para conseguir me ouvir orientando e contando as suas repetições. Assim que você se posicionar e eu te enxergar por inteiro, começamos!';
         break;
       case 'ROSCA DIRETA':
-        message = 'Oi! Sou a TerlineT e vou acompanhar seus bíceps. Posicione o celular e afaste-se um pouco para que eu veja seus braços e tronco por completo. Tente não balançar o corpo na subida. Quando estiver pronto, é só começar!';
+        message = 'Oi! Tudo certo para o treino? Sou a TerlineT. Para eu acompanhar sua rosca direta, por favor, afaste-se um pouco para que eu veja seus braços e tronco claramente. Aumente o som do celular para ouvir minhas dicas de postura e a contagem. Estou pronta para observar você!';
         break;
       default:
-        message = 'Olá, sou a TerlineT! Para começarmos o treino de ${widget.exercise}, posicione seu dispositivo de forma estável e afaste-se o suficiente para que eu veja seu corpo inteiro. Estou pronta para observar e contar seus movimentos!';
+        message = 'Olá! Tudo bem? Sou a TerlineT. Para começarmos este exercício, posicione o dispositivo de forma estável e afaste-se para que eu veja seu corpo inteiro. Não esqueça de deixar o volume no máximo para me ouvir contando seus movimentos. Vamos nessa!';
     }
     _speakToIA(message);
   }
