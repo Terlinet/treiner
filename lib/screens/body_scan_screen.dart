@@ -40,6 +40,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   CameraStatus _cameraStatus = CameraStatus.loading;
   bool _isRecording = false;
   bool _isProcessing = false;
+  bool _isSynced = false; // Controle de interação para Web Audio
   String _iaStatus = "SISTEMA INICIANDO";
 
   final String _hfServerUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
@@ -72,7 +73,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         await _cameraController!.initialize();
         setState(() {
           _cameraStatus = CameraStatus.available;
-          _iaStatus = "WEB MODE (SKELETON EM MOBILE)";
+          _iaStatus = "AGUARDANDO SINCRONIZAÇÃO";
         });
         return;
       }
@@ -89,12 +90,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         return;
       }
 
-      _cameraController = CameraController(
-        cameras.first,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-
+      _cameraController = CameraController(cameras.first, ResolutionPreset.medium, enableAudio: false);
       await _cameraController!.initialize();
       _cameraController!.startImageStream(_processCameraImage);
 
@@ -103,109 +99,52 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           _cameraStatus = CameraStatus.available;
           _iaStatus = "SCANNER ATIVO";
         });
-        _welcomeStudent();
       }
     } catch (e) {
       setState(() { _cameraStatus = CameraStatus.error; });
     }
   }
 
-  Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy) return;
-    _isBusy = true;
-
-    try {
-      // Implementação real exigiria InputImage.fromBytes para Mobile
-      // poses = await _poseDetector.processImage(inputImage);
-      if (mounted) setState(() {});
-    } catch (e) {
-      print("Erro no processamento: $e");
-    } finally {
-      _isBusy = false;
-    }
+  // Função para dar o "Start" real (Necessário para áudio no Chrome)
+  void _syncSystem() {
+    setState(() {
+      _isSynced = true;
+      _iaStatus = "ORIENTANDO ALUNO";
+    });
+    _welcomeStudent();
   }
 
   void _welcomeStudent() {
     String message = "";
-
-    // Orientações específicas baseadas no exercício
     switch (widget.exercise) {
       case 'AGACHAMENTO':
-        message = 'Apoie o celular em um local firme a cerca de 2 metros. Afaste-se até que eu consiga ver seus pés e cabeça. Mantenha as costas retas e pode começar!';
+        message = 'Olá! Para o agachamento, apoie o celular a 2 metros de distância. Eu preciso ver seus pés e cabeça. Pode começar quando estiver pronto!';
         break;
       case 'ROSCA DIRETA':
-        message = 'Vamos focar no bíceps! Fique de frente para a câmera, a uma distância que eu veja seus braços por inteiro. Evite balançar o corpo durante a subida. Estou pronto!';
-        break;
-      case 'ELEVAÇÃO LATERAL':
-        message = 'Hora de trabalhar os ombros. Posicione-se de frente, mantenha os braços levemente flexionados e suba até a linha dos ombros. Aguardo seu início!';
-        break;
-      case 'SUPINO':
-        message = 'Para o supino, certifique-se de que o celular está em um ângulo que eu veja seu peito e braços. Mantenha o controle na descida. Vamos lá!';
+        message = 'Bíceps em foco! Fique de frente para a câmera e mostre seus braços por inteiro. Evite balançar o tronco. Vamos lá!';
         break;
       default:
-        message = 'Iniciando acompanhamento de ${widget.exercise}. Posicione o dispositivo de forma estável para que eu consiga observar seus movimentos. Estou pronto para contar!';
+        message = 'Iniciando treino de ${widget.exercise}. Posicione o celular de forma estável para eu observar seus movimentos!';
     }
-
-    setState(() {
-      _iaStatus = "CONFIGURANDO POSIÇÃO";
-    });
-
     _speakToIA(message);
   }
 
-  Future<void> _startRecording() async {
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/audio_query.m4a';
-        const config = RecordConfig();
-        await _audioRecorder.start(config, path: path);
-        setState(() {
-          _isRecording = true;
-          _iaStatus = "OUVINDO...";
-        });
-      }
-    } catch (e) {
-      print("Erro ao gravar: $e");
-    }
-  }
-
-  Future<void> _stopAndSend() async {
-    final path = await _audioRecorder.stop();
+  // Simulação de movimento para teste no Chrome (PC)
+  void _simulateMovement() {
     setState(() {
-      _isRecording = false;
-      _isProcessing = true;
-      _iaStatus = "PROCESSANDO VOZ...";
+      _repCounter.count++;
+      _iaStatus = "MOVIMENTO DETECTADO";
     });
-    if (path != null) {
-      await _sendAudioToIA(File(path));
+    if (_repCounter.count % 5 == 0) {
+      _speakToIA("Excelente ritmo! Você já completou ${_repCounter.count} repetições. Continue assim!");
     }
   }
 
-  Future<void> _sendAudioToIA(File audioFile) async {
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse('$_hfServerUrl/voice_query'));
-      request.fields['modality'] = widget.exercise;
-      request.fields['reps'] = _repCounter.count.toString();
-      request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path));
-
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        var responseData = await response.stream.bytesToString();
-        var data = jsonDecode(responseData);
-        if (data['audio'] != null) {
-          setState(() { _iaStatus = "TREINADOR FALANDO"; });
-          await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
-        }
-      }
-    } catch (e) {
-      print("Erro ao enviar áudio: $e");
-    } finally {
-      setState(() {
-        _isProcessing = false;
-        _iaStatus = "AGUARDANDO COMANDO";
-      });
-    }
+  Future<void> _processCameraImage(CameraImage image) async {
+    if (_isBusy || kIsWeb) return;
+    _isBusy = true;
+    // Lógica ML Kit Pose (Nativa Mobile)
+    _isBusy = false;
   }
 
   Future<void> _speakToIA(String userText) async {
@@ -222,7 +161,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
           "modality": widget.exercise,
           "reps": _repCounter.count,
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final String? audioBase64 = data['audio'];
@@ -233,11 +173,37 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       }
     } catch (e) {
       print("Erro na IA: $e");
+      setState(() { _iaStatus = "ERRO DE CONEXÃO"; });
     } finally {
-      setState(() {
-        _isProcessing = false;
-        _iaStatus = "AGUARDANDO COMANDO";
-      });
+      setState(() { _isProcessing = false; });
+    }
+  }
+
+  // Métodos de Gravação (Voz)
+  Future<void> _startRecording() async {
+    if (await _audioRecorder.hasPermission()) {
+      final directory = await getTemporaryDirectory();
+      await _audioRecorder.start(const RecordConfig(), path: '${directory.path}/query.m4a');
+      setState(() { _isRecording = true; _iaStatus = "OUVINDO..."; });
+    }
+  }
+
+  Future<void> _stopAndSend() async {
+    final path = await _audioRecorder.stop();
+    setState(() { _isRecording = false; _isProcessing = true; _iaStatus = "ANALISANDO VOZ..."; });
+    if (path != null) {
+      var request = http.MultipartRequest('POST', Uri.parse('$_hfServerUrl/voice_query'));
+      request.fields['modality'] = widget.exercise;
+      request.fields['reps'] = _repCounter.count.toString();
+      request.files.add(await http.MultipartFile.fromPath('audio', path));
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        var data = jsonDecode(await response.stream.bytesToString());
+        if (data['audio'] != null) {
+          await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
+        }
+      }
+      setState(() { _isProcessing = false; _iaStatus = "AGUARDANDO"; });
     }
   }
 
@@ -248,6 +214,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       body: Stack(
         children: [
           _buildCameraLayer(),
+
+          // Interface de Sincronização (Apenas no início)
+          if (!_isSynced) _buildSyncOverlay(),
+
+          // HUD Superior
           Positioned(
             top: 50,
             left: 20,
@@ -260,145 +231,113 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               ],
             ),
           ),
-          Positioned(
-            bottom: 150,
-            left: 30,
-            right: 30,
-            child: Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                border: Border.all(color: WelcomeScreen.panoOrange, width: 2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    _iaStatus,
-                    style: GoogleFonts.orbitron(
-                      color: WelcomeScreen.panoOrange,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (_isProcessing)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 10),
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.black,
-                        color: WelcomeScreen.panoOrange,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onLongPressStart: (_) => _startRecording(),
-                onLongPressEnd: (_) => _stopAndSend(),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: _isRecording ? 100 : 80,
-                  width: _isRecording ? 100 : 80,
-                  decoration: BoxDecoration(
-                    color: _isRecording ? Colors.redAccent : WelcomeScreen.panoOrange,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isRecording ? Colors.red : WelcomeScreen.panoOrange).withOpacity(0.5),
-                        blurRadius: _isRecording ? 40 : 20,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    _isProcessing ? Icons.sync : (_isRecording ? Icons.mic : Icons.mic_none),
-                    color: Colors.black,
-                    size: 40,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 125,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                _isRecording ? "SOLTE PARA ENVIAR" : "SEGURE PARA FALAR",
-                style: GoogleFonts.orbitron(color: Colors.white54, fontSize: 10),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 50,
-            left: 20,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 30),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
+
+          // Botões de Teste para WEB (PC)
+          if (kIsWeb && _isSynced) _buildWebTestButtons(),
+
+          // HUD IA Status
+          _buildIAStatusPanel(),
+
+          // Microfone
+          if (_isSynced) _buildMicButton(),
+
+          // Botão Sair
+          Positioned(top: 50, left: 20, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSyncOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.psychology, color: WelcomeScreen.panoOrange, size: 80),
+            const SizedBox(height: 20),
+            Text("SISTEMA PRONTO", style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24)),
+            const SizedBox(height: 10),
+            const Text("Clique abaixo para iniciar a IA e as orientações", style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: _syncSystem,
+              style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange, padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20)),
+              child: const Text("INICIAR TREINO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebTestButtons() {
+    return Positioned(
+      top: 150,
+      right: 20,
+      child: Column(
+        children: [
+          ElevatedButton.icon(
+            onPressed: _simulateMovement,
+            icon: const Icon(Icons.add),
+            label: const Text("SIMULAR REP"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white10),
+          ),
+          const SizedBox(height: 10),
+          const Text("Modo Web: Use para testar IA", style: TextStyle(color: Colors.white24, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIAStatusPanel() {
+    return Positioned(
+      bottom: 150,
+      left: 30,
+      right: 30,
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(color: Colors.black87, border: Border.all(color: WelcomeScreen.panoOrange, width: 2), borderRadius: BorderRadius.circular(10)),
+        child: Column(
+          children: [
+            Text(_iaStatus, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 12, fontWeight: FontWeight.bold)),
+            if (_isProcessing) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator(backgroundColor: Colors.black, color: WelcomeScreen.panoOrange)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMicButton() {
+    return Positioned(
+      bottom: 40,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: GestureDetector(
+          onLongPressStart: (_) => _startRecording(),
+          onLongPressEnd: (_) => _stopAndSend(),
+          child: CircleAvatar(
+            radius: 40,
+            backgroundColor: _isRecording ? Colors.red : WelcomeScreen.panoOrange,
+            child: Icon(_isProcessing ? Icons.sync : Icons.mic, color: Colors.black, size: 40),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildCameraLayer() {
-    if (_cameraStatus == CameraStatus.loading) {
-      return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
-    }
-    if (_cameraStatus == CameraStatus.denied) {
-      return _buildErrorState(Icons.lock_outline, "PERMISSÃO NEGADA", "Ative a câmera nas configurações.");
-    }
-    if (_cameraStatus == CameraStatus.notFound) {
-      return _buildErrorState(Icons.videocam_off_outlined, "CÂMERA NÃO ENCONTRADA", "Conecte uma câmera para treinar.");
-    }
-    if (_cameraStatus == CameraStatus.error || _cameraController == null) {
-      return _buildErrorState(Icons.error_outline, "ERRO NO SISTEMA", "Reinicie o aplicativo.");
-    }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        CameraPreview(_cameraController!),
-        if (_customPaint != null) _customPaint!,
-      ],
-    );
-  }
-
-  Widget _buildErrorState(IconData icon, String title, String sub) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: WelcomeScreen.panoOrange, size: 80),
-          const SizedBox(height: 20),
-          Text(title, style: GoogleFonts.orbitron(color: Colors.white, fontSize: 20)),
-          const SizedBox(height: 10),
-          Text(sub, style: GoogleFonts.roboto(color: Colors.white54, fontSize: 14)),
-          const SizedBox(height: 30),
-          ElevatedButton(
-            onPressed: _checkAndInitializeCamera,
-            style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange),
-            child: const Text("TENTAR NOVAMENTE", style: TextStyle(color: Colors.black)),
-          )
-        ],
-      ),
-    );
+    if (_cameraStatus == CameraStatus.loading) return const Center(child: CircularProgressIndicator(color: WelcomeScreen.panoOrange));
+    if (_cameraStatus != CameraStatus.available || _cameraController == null) return Container(color: Colors.black);
+    return Stack(fit: StackFit.expand, children: [CameraPreview(_cameraController!), if (_customPaint != null) _customPaint!]);
   }
 
   Widget _buildStatTile(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10)),
-        Text(value, style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 10)),
+      Text(value, style: GoogleFonts.orbitron(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+    ]);
   }
 }
