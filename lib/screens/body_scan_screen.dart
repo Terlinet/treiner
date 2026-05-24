@@ -35,6 +35,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   int _reps = 0;
   bool _isInMovement = false;
 
+  String? _selectedGoal;
+  int? _targetReps;
+  bool _goalReached = false;
+
   final String _apiBaseUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
   @override
@@ -173,11 +177,12 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     // Lógica de Agachamento:
     // Down: ângulo diminui (ex: < 110)
     // Up: ângulo aumenta (ex: > 155)
-    if (avgAngle < 110 && !_isInMovement) {
+    if (avgAngle < 110 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle > 155 && _isInMovement) {
       _isInMovement = false;
       setState(() => _reps++);
+      _checkGoal();
       _flutterTts.speak("$_reps");
       _speakToIA("$_reps", isBackground: true);
     }
@@ -196,11 +201,12 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double avgAngle = (leftAngle + rightAngle) / 2;
 
     // Lógica de Rosca: Contraído < 40, Extendido > 150
-    if (avgAngle < 40 && !_isInMovement) {
+    if (avgAngle < 40 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle > 150 && _isInMovement) {
       _isInMovement = false;
       setState(() => _reps++);
+      _checkGoal();
       _flutterTts.speak("$_reps");
       _speakToIA("$_reps", isBackground: true);
     }
@@ -220,14 +226,34 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double avgAngle = (leftAngle + rightAngle) / 2;
 
     // Elevação: Braços abertos > 80, Braços fechados < 30
-    if (avgAngle > 80 && !_isInMovement) {
+    if (avgAngle > 80 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle < 30 && _isInMovement) {
       _isInMovement = false;
       setState(() => _reps++);
+      _checkGoal();
       _flutterTts.speak("$_reps");
       _speakToIA("$_reps", isBackground: true);
     }
+  }
+
+  void _checkGoal() {
+    if (_targetReps != null && _reps >= _targetReps! && !_goalReached) {
+      _goalReached = true;
+      _speakToIA("OBJETIVO_ALCANCADO");
+    }
+  }
+
+  void _selectGoal(String goal) {
+    setState(() {
+      _selectedGoal = goal;
+      if (goal == "Emagrecer") _targetReps = 15;
+      if (goal == "Ganhar Massa") _targetReps = 10;
+      if (goal == "Resistência") _targetReps = 20;
+    });
+
+    String msg = "Objetivo definido: $goal. Vamos fazer $_targetReps repetições de ${widget.exercise}. Pode começar!";
+    _flutterTts.speak(msg);
   }
 
   void _playBase64Audio(String base64String) {
@@ -278,8 +304,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   }
 
   void _syncSystem() {
-    setState(() { _isSynced = true; _iaStatus = "CAMERA ATIVA - POSICIONE-SE"; });
-    _speakToIA("INICIAR");
+    setState(() { _isSynced = true; _iaStatus = "SELECIONE SEU OBJETIVO"; });
+    _flutterTts.speak("Olá! Sou a TerlineT. Qual é o seu objetivo hoje? Emagrecer, Ganhar massa muscular ou Aumentar a resistência? Escolha uma opção abaixo.");
   }
 
   @override
@@ -302,6 +328,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
           if (!_isSynced) _buildSyncOverlay(),
 
+          if (_isSynced && _selectedGoal == null) _buildGoalSelectionOverlay(),
+
           // HUD Superior
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
@@ -309,7 +337,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
             right: 20,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [_buildStatTile("EXERCÍCIO", widget.exercise), _buildStatTile("REPETIÇÕES", _reps.toString())],
+              children: [
+                _buildStatTile("EXERCÍCIO", widget.exercise),
+                _buildStatTile("REPETIÇÕES", "$_reps${_targetReps != null ? ' / $_targetReps' : ''}")
+              ],
             ),
           ),
 
@@ -343,6 +374,58 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: WelcomeScreen.panoOrange, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
               child: const Text("INICIAR TREINO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoalSelectionOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.85),
+      padding: const EdgeInsets.symmetric(horizontal: 30),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("QUAL SEU OBJETIVO?", style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text("Escolha uma opção para a TerlineT te orientar", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 30),
+            _buildGoalButton("Emagrecer", "Alta queima calórica", Icons.local_fire_department),
+            const SizedBox(height: 15),
+            _buildGoalButton("Ganhar Massa", "Foco em hipertrofia", Icons.fitness_center),
+            const SizedBox(height: 15),
+            _buildGoalButton("Resistência", "Mais fôlego e força", Icons.timer),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoalButton(String title, String subtitle, IconData icon) {
+    return InkWell(
+      onTap: () => _selectGoal(title),
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: WelcomeScreen.panoOrange.withOpacity(0.5)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: WelcomeScreen.panoOrange, size: 30),
+            const SizedBox(width: 20),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
           ],
         ),
       ),
