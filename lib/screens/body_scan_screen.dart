@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:math' as math;
@@ -40,6 +41,9 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   int _currentSet = 1;
   final int _totalSets = 3;
   bool _goalReached = false;
+  bool _isResting = false;
+  int _restSeconds = 45;
+  Timer? _restTimer;
 
   final String _apiBaseUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
@@ -62,6 +66,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     _stopCamera();
     _flutterTts.stop();
     _textController.dispose();
+    _restTimer?.cancel();
     super.dispose();
   }
 
@@ -86,22 +91,14 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         ..style.left = '0'
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.zIndex = '-1'; // Garante que o vídeo fique atrás do Flutter
+        ..style.objectFit = 'cover';
 
-      _videoElement!.srcObject = stream;
-      await _videoElement!.play();
-
-      html.document.body!.append(_videoElement!);
+      html.document.body?.append(_videoElement!);
+      _startMediaPipe();
 
       if (mounted) {
-        setState(() {
-          _cameraStatus = CameraStatus.available;
-          _iaStatus = "CÂMERA ATIVA - AGUARDANDO SINCRONIZAÇÃO";
-        });
+        setState(() => _cameraStatus = CameraStatus.available);
       }
-      await Future.delayed(const Duration(milliseconds: 500));
-      _startMediaPipe();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -150,7 +147,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         _countLateralRaise(landmarks);
         break;
       default:
-        // Outros exercícios podem ser adicionados aqui
         break;
     }
   }
@@ -166,7 +162,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _countSquat(List<dynamic> landmarks) {
     if (landmarks.length < 29) return;
 
-    // Verificar visibilidade (quadril, joelho e tornozelo de ambos os lados)
     final criticalPoints = [23, 24, 25, 26, 27, 28];
     for (var i in criticalPoints) {
       if (landmarks[i]['visibility'] < 0.5) return;
@@ -176,9 +171,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double rightAngle = _calculateAngle(landmarks[24], landmarks[26], landmarks[28]);
     double avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Lógica de Agachamento:
-    // Down: ângulo diminui (ex: < 110)
-    // Up: ângulo aumenta (ex: > 155)
     if (avgAngle < 110 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle > 155 && _isInMovement) {
@@ -202,7 +194,6 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double rightAngle = _calculateAngle(landmarks[12], landmarks[14], landmarks[16]);
     double avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Lógica de Rosca: Contraído < 40, Extendido > 150
     if (avgAngle < 40 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle > 150 && _isInMovement) {
@@ -222,12 +213,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       if (landmarks[i]['visibility'] < 0.5) return;
     }
 
-    // Ângulo do ombro (Hip - Shoulder - Elbow)
     double leftAngle = _calculateAngle(landmarks[23], landmarks[11], landmarks[13]);
     double rightAngle = _calculateAngle(landmarks[24], landmarks[12], landmarks[14]);
     double avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Elevação: Braços abertos > 80, Braços fechados < 30
     if (avgAngle > 80 && !_isInMovement && !_goalReached) {
       _isInMovement = true;
     } else if (avgAngle < 30 && _isInMovement) {
@@ -243,8 +232,45 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     if (_targetReps != null && _reps >= _targetReps! && !_goalReached) {
       _goalReached = true;
       _flutterTts.stop();
-      _speakToIA("OBJETIVO_ALCANCADO");
+
+      if (_currentSet < _totalSets) {
+        _startRestPeriod();
+      } else {
+        _speakToIA("OBJETIVO_ALCANCADO");
+      }
     }
+  }
+
+  void _startRestPeriod() {
+    setState(() {
+      _isResting = true;
+      _restSeconds = 45;
+      _iaStatus = "INTERVALO DE RECUPERAÇÃO";
+    });
+
+    _flutterTts.speak("Série concluída! Hora de descansar. Você tem 45 segundos.");
+
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_restSeconds > 0) {
+        setState(() => _restSeconds--);
+        if (_restSeconds == 10) _flutterTts.speak("10 segundos para começar.");
+      } else {
+        timer.cancel();
+        _nextSet();
+      }
+    });
+  }
+
+  void _nextSet() {
+    setState(() {
+      _currentSet++;
+      _reps = 0;
+      _isResting = false;
+      _goalReached = false;
+      _iaStatus = "SÉRIE $_currentSet INICIADA";
+    });
+    _flutterTts.speak("Descanso encerrado! Vamos para a série $_currentSet. Posicione-se e pode começar!");
+    _speakToIA("INICIAR_PROXIMA_SERIE", isBackground: true);
   }
 
   void _selectGoal(String goal) {
@@ -318,13 +344,11 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // TORNA O FLUTTER TRANSPARENTE
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Espaço do vídeo (está no fundo via DOM)
           if (_cameraStatus == CameraStatus.available) Container(color: Colors.transparent),
 
-          // Desenho do esqueleto calibrado para o modo Cover do vídeo
           if (_landmarks.isNotEmpty && _isSynced)
             Positioned.fill(
               child: CustomPaint(
@@ -337,7 +361,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
           if (_isSynced && _selectedGoal == null) _buildGoalSelectionOverlay(),
 
-          // HUD Superior
+          if (_isResting) _buildRestOverlay(),
+
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 20,
@@ -405,6 +430,28 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
             _buildGoalButton("Ganhar Massa", "Foco em hipertrofia", Icons.fitness_center),
             const SizedBox(height: 15),
             _buildGoalButton("Resistência", "Mais fôlego e força", Icons.timer),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRestOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.85),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.timer, color: WelcomeScreen.panoOrange, size: 80),
+            const SizedBox(height: 20),
+            Text("TEMPO DE DESCANSO", style: GoogleFonts.orbitron(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text("00:${_restSeconds.toString().padLeft(2, '0')}", style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontSize: 60, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            const Text("Recupere o fôlego e mantenha-se hidratado", style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 40),
+            Text("PRÓXIMA SÉRIE: $_currentSet / $_totalSets", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -508,8 +555,7 @@ class PosePainter extends CustomPainter {
     final paintLine = Paint()..color = WelcomeScreen.panoOrange..strokeWidth = 4.0..style = PaintingStyle.stroke;
     final paintPoint = Paint()..color = Colors.white..style = PaintingStyle.fill;
 
-    // MATEMÁTICA DE MAPEAMENTO (Ajustado para o modo Cover)
-    const double videoAspect = 4 / 3; // Padrão MediaPipe
+    const double videoAspect = 4 / 3;
     final double screenAspect = screenSize.width / screenSize.height;
 
     double scale;
@@ -525,7 +571,6 @@ class PosePainter extends CustomPainter {
     }
 
     Offset getOffset(dynamic lm) {
-      // Inverte X para efeito espelho e aplica escala do modo cover
       double x = (1.0 - (lm['x'] as num).toDouble()) * (scale * videoAspect) - offsetX;
       double y = (lm['y'] as num).toDouble() * scale - offsetY;
       return Offset(x, y);
