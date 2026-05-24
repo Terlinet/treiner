@@ -37,6 +37,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   String? _selectedGoal;
   int? _targetReps;
+  int _currentSet = 1;
+  final int _totalSets = 3;
   bool _goalReached = false;
 
   final String _apiBaseUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
@@ -254,7 +256,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     });
 
     _flutterTts.stop();
-    _flutterTts.speak("Objetivo $goal. Meta de $_targetReps repetições. Pode começar!");
+    _flutterTts.speak("Objetivo $goal.");
+    _flutterTts.speak("A meta são $_totalSets séries de $_targetReps repetições.");
+    _flutterTts.speak("O tempo de pausa entre as séries deve ficar entre 45 segundos e 2 minutos, dependendo do seu objetivo e do nível de cansaço.");
+    _flutterTts.speak("Pode começar a primeira série!");
   }
 
   void _playBase64Audio(String base64String) {
@@ -341,7 +346,8 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildStatTile("EXERCÍCIO", widget.exercise),
-                _buildStatTile("REPETIÇÕES", "$_reps${_targetReps != null ? ' / $_targetReps' : ''}")
+                _buildStatTile("SÉRIE", "$_currentSet / $_totalSets"),
+                _buildStatTile("REPS", "$_reps / $_targetReps")
               ],
             ),
           ),
