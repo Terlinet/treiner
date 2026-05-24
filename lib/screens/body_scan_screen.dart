@@ -51,7 +51,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   Future<void> _initTts() async {
     await _flutterTts.setLanguage("pt-BR");
-    await _flutterTts.setSpeechRate(0.5); // Velocidade normal
+    await _flutterTts.setSpeechRate(0.55); // Velocidade levemente aumentada para naturalidade
     await _flutterTts.setPitch(1.0);
   }
 
@@ -240,6 +240,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _checkGoal() {
     if (_targetReps != null && _reps >= _targetReps! && !_goalReached) {
       _goalReached = true;
+      _flutterTts.stop();
       _speakToIA("OBJETIVO_ALCANCADO");
     }
   }
@@ -252,8 +253,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       if (goal == "Resistência") _targetReps = 20;
     });
 
-    String msg = "Objetivo definido: $goal. Vamos fazer $_targetReps repetições de ${widget.exercise}. Pode começar!";
-    _flutterTts.speak(msg);
+    _flutterTts.stop();
+    _flutterTts.speak("Objetivo: $goal.");
+    _flutterTts.speak("Meta de $_targetReps repetições.");
+    _flutterTts.speak("Pode começar!");
   }
 
   void _playBase64Audio(String base64String) {
@@ -305,7 +308,9 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   void _syncSystem() {
     setState(() { _isSynced = true; _iaStatus = "SELECIONE SEU OBJETIVO"; });
-    _flutterTts.speak("Olá! Sou a TerlineT. Qual é o seu objetivo hoje? Emagrecer, Ganhar massa muscular ou Aumentar a resistência? Escolha uma opção abaixo.");
+    _flutterTts.stop();
+    _flutterTts.speak("Olá! Escolha seu objetivo abaixo.");
+    _flutterTts.speak("Emagrecer, Ganhar Massa ou Resistência?");
   }
 
   @override
