@@ -51,7 +51,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
 
   Future<void> _initTts() async {
     await _flutterTts.setLanguage("pt-BR");
-    await _flutterTts.setSpeechRate(0.55); // Velocidade levemente aumentada para naturalidade
+    await _flutterTts.setSpeechRate(1.0); // Velocidade normal/rápida para soar natural
     await _flutterTts.setPitch(1.0);
   }
 
@@ -254,9 +254,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     });
 
     _flutterTts.stop();
-    _flutterTts.speak("Objetivo: $goal.");
-    _flutterTts.speak("Meta de $_targetReps repetições.");
-    _flutterTts.speak("Pode começar!");
+    _flutterTts.speak("Objetivo $goal. Meta de $_targetReps repetições. Pode começar!");
   }
 
   void _playBase64Audio(String base64String) {
@@ -309,8 +307,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _syncSystem() {
     setState(() { _isSynced = true; _iaStatus = "SELECIONE SEU OBJETIVO"; });
     _flutterTts.stop();
-    _flutterTts.speak("Olá! Escolha seu objetivo abaixo.");
-    _flutterTts.speak("Emagrecer, Ganhar Massa ou Resistência?");
+    _flutterTts.speak("Olá! Escolha seu objetivo abaixo: Emagrecer, Ganhar Massa ou Resistência.");
   }
 
   @override
