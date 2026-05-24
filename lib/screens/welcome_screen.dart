@@ -115,13 +115,50 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
             // Bottom Action
             Positioned(
-              bottom: 50,
-              left: 0,
-              right: 0,
-              child: Center(child: _buildPanobiancoButton()),
+              bottom: 40,
+              left: 20,
+              right: 20,
+              child: Column(
+                children: [
+                  _buildPanobiancoButton(),
+                  const SizedBox(height: 25),
+                  _buildMedicalDisclaimer(),
+                ],
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMedicalDisclaimer() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(maxWidth: 600),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.medical_services_outlined, color: WelcomeScreen.panoOrange, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'ADVERTÊNCIA: Consulte um médico antes de iniciar qualquer atividade física. '
+              'Este aplicativo fornece orientações educacionais e não substitui o aconselhamento médico profissional. '
+              'Ao utilizar a TerlineT Treiner, você assume total responsabilidade pelos riscos inerentes à prática de exercícios.',
+              style: GoogleFonts.roboto(
+                color: Colors.white54,
+                fontSize: 10,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
