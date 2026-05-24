@@ -150,7 +150,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       _isSquatting = false;
       setState(() => _reps++);
       _flutterTts.speak("$_reps");
-      _speakToIA("$_reps", silent: true);
+      _speakToIA("$_reps", isBackground: true);
     }
   }
 
@@ -165,7 +165,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     }
   }
 
-  Future<void> _speakToIA(String userText, {bool silent = false}) async {
+  Future<void> _speakToIA(String userText, {bool silent = false, bool isBackground = false}) async {
     if (silent) {
       try {
         await http.post(Uri.parse('$_apiBaseUrl/query'), headers: {"Content-Type": "application/json"}, body: jsonEncode({"text": userText, "modality": widget.exercise, "reps": _reps}));
@@ -173,7 +173,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       return;
     }
 
-    setState(() { _isProcessing = true; _iaStatus = "TERLINET PENSANDO..."; });
+    if (!isBackground) {
+      setState(() { _isProcessing = true; _iaStatus = "TERLINET PENSANDO..."; });
+    }
+
     try {
       final response = await http.post(Uri.parse('$_apiBaseUrl/query'), headers: {"Content-Type": "application/json"}, body: jsonEncode({"text": userText, "modality": widget.exercise, "reps": _reps}));
       if (response.statusCode == 200) {
@@ -181,18 +184,20 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         String textToSpeak = data['text'] ?? "";
         String? audioBase64 = data['audio'];
 
-        setState(() => _iaStatus = "TERLINET FALANDO");
+        if (textToSpeak.isNotEmpty && !isBackground) {
+          setState(() => _iaStatus = "TERLINET FALANDO");
+        }
 
         if (audioBase64 != null) {
           _playBase64Audio(audioBase64);
-        } else {
+        } else if (textToSpeak.isNotEmpty) {
           await _flutterTts.speak(textToSpeak);
         }
       }
     } catch (e) {
-      setState(() => _iaStatus = "ERRO DE CONEXÃO");
+      if (!isBackground) setState(() => _iaStatus = "ERRO DE CONEXÃO");
     } finally {
-      setState(() => _isProcessing = false);
+      if (!isBackground) setState(() => _isProcessing = false);
     }
   }
 
