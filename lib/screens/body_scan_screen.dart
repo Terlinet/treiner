@@ -7,6 +7,8 @@ import 'package:audioplayers/audioplayers.dart';
 import '../services/js_bridge.dart' as bridge;
 import 'welcome_screen.dart';
 
+import 'package:flutter_tts/flutter_tts.dart';
+
 enum CameraStatus { loading, available, denied, error }
 
 class BodyScanScreen extends StatefulWidget {
@@ -19,7 +21,7 @@ class BodyScanScreen extends StatefulWidget {
 }
 
 class _BodyScanScreenState extends State<BodyScanScreen> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final FlutterTts _flutterTts = FlutterTts();
   final TextEditingController _textController = TextEditingController();
 
   html.VideoElement? _videoElement;
@@ -38,14 +40,21 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   @override
   void initState() {
     super.initState();
+    _initTts();
     _initCameraWeb();
     _setupPoseCallback();
+  }
+
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage("pt-BR");
+    await _flutterTts.setSpeechRate(0.5); // Velocidade normal
+    await _flutterTts.setPitch(1.0);
   }
 
   @override
   void dispose() {
     _stopCamera();
-    _audioPlayer.dispose();
+    _flutterTts.stop();
     _textController.dispose();
     super.dispose();
   }
@@ -132,14 +141,27 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double rightKneeY = landmarks[26]['y'];
     double kneeY = (leftKneeY + rightKneeY) / 2;
 
-    bool currentlySquatting = kneeY > hipY + 0.1;
+    // Sensibilidade aumentada: 0.05 de diferença já detecta o movimento
+    bool currentlySquatting = kneeY > hipY + 0.05;
 
     if (currentlySquatting && !_isSquatting) {
       _isSquatting = true;
     } else if (!currentlySquatting && _isSquatting) {
       _isSquatting = false;
       setState(() => _reps++);
+      _flutterTts.speak("$_reps");
       _speakToIA("$_reps", silent: true);
+    }
+  }
+
+  void _playBase64Audio(String base64String) {
+    try {
+      final blob = html.Blob([base64Decode(base64String)], 'audio/mpeg');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final audio = html.AudioElement(url);
+      audio.play();
+    } catch (e) {
+      print("Erro ao tocar áudio: $e");
     }
   }
 
@@ -156,8 +178,16 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       final response = await http.post(Uri.parse('$_apiBaseUrl/query'), headers: {"Content-Type": "application/json"}, body: jsonEncode({"text": userText, "modality": widget.exercise, "reps": _reps}));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        String textToSpeak = data['text'] ?? "";
+        String? audioBase64 = data['audio'];
+
         setState(() => _iaStatus = "TERLINET FALANDO");
-        if (data['audio'] != null) await _audioPlayer.play(BytesSource(base64Decode(data['audio'])));
+
+        if (audioBase64 != null) {
+          _playBase64Audio(audioBase64);
+        } else {
+          await _flutterTts.speak(textToSpeak);
+        }
       }
     } catch (e) {
       setState(() => _iaStatus = "ERRO DE CONEXÃO");
