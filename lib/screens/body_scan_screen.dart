@@ -146,8 +146,44 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
       case 'ELEVAÇÃO LATERAL':
         _countLateralRaise(landmarks);
         break;
+      case 'CAMINHADA ESTACIONÁRIA':
+        _countStationaryWalk(landmarks);
+        break;
       default:
         break;
+    }
+  }
+
+  void _countStationaryWalk(List<dynamic> landmarks) {
+    if (landmarks.length < 29) return;
+
+    // Verificar visibilidade (quadril e joelhos)
+    final criticalPoints = [23, 24, 25, 26];
+    for (var i in criticalPoints) {
+      if (landmarks[i]['visibility'] < 0.5) return;
+    }
+
+    // Lógica: Se o joelho subir acima de uma linha imaginária próxima ao quadril
+    // Usamos a diferença de Y (Y aumenta para baixo)
+    double leftHipY = landmarks[23]['y'];
+    double rightHipY = landmarks[24]['y'];
+    double avgHipY = (leftHipY + rightHipY) / 2;
+
+    double leftKneeY = landmarks[25]['y'];
+    double rightKneeY = landmarks[26]['y'];
+
+    // Se qualquer um dos joelhos subir significativamente (valor Y diminui)
+    // 0.15 é um valor de sensibilidade para "joelho alto"
+    bool kneeRaised = leftKneeY < (avgHipY + 0.05) || rightKneeY < (avgHipY + 0.05);
+
+    if (kneeRaised && !_isInMovement && !_goalReached) {
+      _isInMovement = true;
+    } else if (!kneeRaised && _isInMovement) {
+      _isInMovement = false;
+      setState(() => _reps++);
+      _checkGoal();
+      _flutterTts.speak("$_reps");
+      _speakToIA("$_reps", isBackground: true);
     }
   }
 
@@ -276,14 +312,17 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   void _selectGoal(String goal) {
     setState(() {
       _selectedGoal = goal;
-      if (goal == "Emagrecer") _targetReps = 15;
-      if (goal == "Ganhar Massa") _targetReps = 10;
-      if (goal == "Resistência") _targetReps = 20;
+      bool isWalk = widget.exercise == 'CAMINHADA ESTACIONÁRIA';
+
+      if (goal == "Emagrecer") _targetReps = isWalk ? 100 : 15;
+      if (goal == "Ganhar Massa") _targetReps = isWalk ? 50 : 10;
+      if (goal == "Resistência") _targetReps = isWalk ? 200 : 20;
     });
 
     _flutterTts.stop();
     _flutterTts.speak("Objetivo $goal.");
-    _flutterTts.speak("A meta são $_totalSets séries de $_targetReps repetições.");
+    String unit = widget.exercise == 'CAMINHADA ESTACIONÁRIA' ? "passos" : "repetições";
+    _flutterTts.speak("A meta são $_totalSets séries de $_targetReps $unit.");
     _flutterTts.speak("O tempo de pausa entre as séries deve ficar entre 45 segundos e 2 minutos, dependendo do seu objetivo e do nível de cansaço.");
     _flutterTts.speak("Pode começar a primeira série!");
   }
@@ -372,7 +411,10 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
               children: [
                 _buildStatTile("EXERCÍCIO", widget.exercise),
                 _buildStatTile("SÉRIE", "$_currentSet / $_totalSets"),
-                _buildStatTile("REPS", "$_reps / $_targetReps")
+                _buildStatTile(
+                  widget.exercise == 'CAMINHADA ESTACIONÁRIA' ? "PASSOS" : "REPS",
+                  "$_reps / $_targetReps"
+                )
               ],
             ),
           ),

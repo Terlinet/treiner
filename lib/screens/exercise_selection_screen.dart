@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'welcome_screen.dart';
 import 'body_scan_screen.dart';
+import 'outdoor_walking_screen.dart';
 
 class ExerciseSelectionScreen extends StatelessWidget {
   final String modality;
@@ -17,9 +18,17 @@ class ExerciseSelectionScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: WelcomeScreen.panoOrange),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(
           modality.toUpperCase(),
-          style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontWeight: FontWeight.bold),
+          style: GoogleFonts.orbitron(
+            color: WelcomeScreen.panoOrange,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
         ),
         centerTitle: true,
       ),
@@ -49,21 +58,34 @@ class ExerciseSelectionScreen extends StatelessWidget {
         {'name': 'ELEVAÇÃO LATERAL', 'icon': Icons.unfold_more, 'desc': 'Ombros'},
       ];
     }
+    if (modality == 'Caminhada') {
+      return [
+        {'name': 'CAMINHADA ESTACIONÁRIA', 'icon': Icons.accessibility_new, 'desc': 'Uso da IA e Câmera'},
+        {'name': 'CAMINHADA AO AR LIVRE', 'icon': Icons.map, 'desc': 'Uso de GPS e Mapas'},
+      ];
+    }
     return [{'name': 'TREINO LIVRE', 'icon': Icons.flash_on, 'desc': 'Geral'}];
   }
 
   Widget _buildExerciseCard(BuildContext context, Map<String, dynamic> ex) {
     return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BodyScanScreen(
-              modality: modality,
-              exercise: ex['name'],
+        if (ex['name'] == 'CAMINHADA AO AR LIVRE') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const OutdoorWalkingScreen()),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BodyScanScreen(
+                modality: modality,
+                exercise: ex['name'],
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(

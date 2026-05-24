@@ -93,7 +93,12 @@ class CategoryScreen extends StatelessWidget {
               subtitle: 'Saúde e Bem-estar',
               icon: Icons.directions_walk,
               onTap: () {
-                // Navegar para Caminhada
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ExerciseSelectionScreen(modality: 'Caminhada'),
+                  ),
+                );
               },
             ),
           ],
