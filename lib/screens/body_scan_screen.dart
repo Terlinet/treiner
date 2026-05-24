@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -32,8 +33,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
   bool _isProcessing = false;
   String _iaStatus = "SISTEMA INICIANDO";
   int _reps = 0;
-
-  bool _isSquatting = false;
+  bool _isInMovement = false;
 
   final String _apiBaseUrl = "https://tertulianoshow-terlinet-treiner.hf.space";
 
@@ -119,7 +119,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         setState(() {
           _landmarks = newLandmarks;
         });
-        _countSquat(newLandmarks);
+        _processExercise(newLandmarks);
       }
     });
   }
@@ -130,24 +130,100 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     }
   }
 
+  void _processExercise(List<dynamic> landmarks) {
+    if (landmarks.isEmpty) return;
+
+    switch (widget.exercise.toUpperCase()) {
+      case 'AGACHAMENTO':
+        _countSquat(landmarks);
+        break;
+      case 'ROSCA DIRETA':
+        _countBicepCurl(landmarks);
+        break;
+      case 'ELEVAÇÃO LATERAL':
+        _countLateralRaise(landmarks);
+        break;
+      default:
+        // Outros exercícios podem ser adicionados aqui
+        break;
+    }
+  }
+
+  double _calculateAngle(dynamic a, dynamic b, dynamic c) {
+    double radians = math.atan2(c['y'] - b['y'], c['x'] - b['x']) -
+                     math.atan2(a['y'] - b['y'], a['x'] - b['x']);
+    double angle = (radians * 180.0 / math.pi).abs();
+    if (angle > 180.0) angle = 360.0 - angle;
+    return angle;
+  }
+
   void _countSquat(List<dynamic> landmarks) {
-    if (landmarks.isEmpty || landmarks.length < 27) return;
+    if (landmarks.length < 29) return;
 
-    double leftHipY = landmarks[23]['y'];
-    double rightHipY = landmarks[24]['y'];
-    double hipY = (leftHipY + rightHipY) / 2;
+    // Verificar visibilidade (quadril, joelho e tornozelo de ambos os lados)
+    final criticalPoints = [23, 24, 25, 26, 27, 28];
+    for (var i in criticalPoints) {
+      if (landmarks[i]['visibility'] < 0.5) return;
+    }
 
-    double leftKneeY = landmarks[25]['y'];
-    double rightKneeY = landmarks[26]['y'];
-    double kneeY = (leftKneeY + rightKneeY) / 2;
+    double leftAngle = _calculateAngle(landmarks[23], landmarks[25], landmarks[27]);
+    double rightAngle = _calculateAngle(landmarks[24], landmarks[26], landmarks[28]);
+    double avgAngle = (leftAngle + rightAngle) / 2;
 
-    // Sensibilidade aumentada: 0.05 de diferença já detecta o movimento
-    bool currentlySquatting = kneeY > hipY + 0.05;
+    // Lógica de Agachamento:
+    // Down: ângulo diminui (ex: < 110)
+    // Up: ângulo aumenta (ex: > 155)
+    if (avgAngle < 110 && !_isInMovement) {
+      _isInMovement = true;
+    } else if (avgAngle > 155 && _isInMovement) {
+      _isInMovement = false;
+      setState(() => _reps++);
+      _flutterTts.speak("$_reps");
+      _speakToIA("$_reps", isBackground: true);
+    }
+  }
 
-    if (currentlySquatting && !_isSquatting) {
-      _isSquatting = true;
-    } else if (!currentlySquatting && _isSquatting) {
-      _isSquatting = false;
+  void _countBicepCurl(List<dynamic> landmarks) {
+    if (landmarks.length < 17) return;
+
+    final criticalPoints = [11, 13, 15, 12, 14, 16];
+    for (var i in criticalPoints) {
+      if (landmarks[i]['visibility'] < 0.5) return;
+    }
+
+    double leftAngle = _calculateAngle(landmarks[11], landmarks[13], landmarks[15]);
+    double rightAngle = _calculateAngle(landmarks[12], landmarks[14], landmarks[16]);
+    double avgAngle = (leftAngle + rightAngle) / 2;
+
+    // Lógica de Rosca: Contraído < 40, Extendido > 150
+    if (avgAngle < 40 && !_isInMovement) {
+      _isInMovement = true;
+    } else if (avgAngle > 150 && _isInMovement) {
+      _isInMovement = false;
+      setState(() => _reps++);
+      _flutterTts.speak("$_reps");
+      _speakToIA("$_reps", isBackground: true);
+    }
+  }
+
+  void _countLateralRaise(List<dynamic> landmarks) {
+    if (landmarks.length < 15) return;
+
+    final criticalPoints = [11, 13, 12, 14, 23, 24];
+    for (var i in criticalPoints) {
+      if (landmarks[i]['visibility'] < 0.5) return;
+    }
+
+    // Ângulo do ombro (Hip - Shoulder - Elbow)
+    double leftAngle = _calculateAngle(landmarks[23], landmarks[11], landmarks[13]);
+    double rightAngle = _calculateAngle(landmarks[24], landmarks[12], landmarks[14]);
+    double avgAngle = (leftAngle + rightAngle) / 2;
+
+    // Elevação: Braços abertos > 80, Braços fechados < 30
+    if (avgAngle > 80 && !_isInMovement) {
+      _isInMovement = true;
+    } else if (avgAngle < 30 && _isInMovement) {
+      _isInMovement = false;
       setState(() => _reps++);
       _flutterTts.speak("$_reps");
       _speakToIA("$_reps", isBackground: true);
