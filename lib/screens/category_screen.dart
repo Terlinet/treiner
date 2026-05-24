@@ -83,7 +83,12 @@ class CategoryScreen extends StatelessWidget {
               subtitle: 'Alta Intensidade e Performance',
               icon: Icons.directions_run,
               onTap: () {
-                // Navegar para Corrida
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ExerciseSelectionScreen(modality: 'Corrida'),
+                  ),
+                );
               },
             ),
             const SizedBox(height: 24),

@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 import 'welcome_screen.dart';
 
 class OutdoorWalkingScreen extends StatefulWidget {
-  const OutdoorWalkingScreen({super.key});
+  final bool isRunning;
+  const OutdoorWalkingScreen({super.key, this.isRunning = false});
 
   @override
   State<OutdoorWalkingScreen> createState() => _OutdoorWalkingScreenState();
@@ -94,7 +95,7 @@ class _OutdoorWalkingScreenState extends State<OutdoorWalkingScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'CAMINHADA AO AR LIVRE',
+          widget.isRunning ? 'CORRIDA AO AR LIVRE' : 'CAMINHADA AO AR LIVRE',
           style: GoogleFonts.orbitron(color: WelcomeScreen.panoOrange, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
@@ -104,7 +105,7 @@ class _OutdoorWalkingScreenState extends State<OutdoorWalkingScreen> {
           Positioned.fill(
             child: Opacity(
               opacity: 0.1,
-              child: Icon(Icons.map, size: 400, color: WelcomeScreen.panoOrange),
+              child: Icon(widget.isRunning ? Icons.directions_run : Icons.map, size: 400, color: WelcomeScreen.panoOrange),
             ),
           ),
 

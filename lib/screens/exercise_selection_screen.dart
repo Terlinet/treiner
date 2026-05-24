@@ -64,16 +64,22 @@ class ExerciseSelectionScreen extends StatelessWidget {
         {'name': 'CAMINHADA AO AR LIVRE', 'icon': Icons.map, 'desc': 'Uso de GPS e Mapas'},
       ];
     }
+    if (modality == 'Corrida') {
+      return [
+        {'name': 'CORRIDA ESTACIONÁRIA', 'icon': Icons.flash_on, 'desc': 'High Knees via IA'},
+        {'name': 'CORRIDA AO AR LIVRE', 'icon': Icons.directions_run, 'desc': 'GPS e Telemetria'},
+      ];
+    }
     return [{'name': 'TREINO LIVRE', 'icon': Icons.flash_on, 'desc': 'Geral'}];
   }
 
   Widget _buildExerciseCard(BuildContext context, Map<String, dynamic> ex) {
     return InkWell(
       onTap: () {
-        if (ex['name'] == 'CAMINHADA AO AR LIVRE') {
+        if (ex['name'] == 'CAMINHADA AO AR LIVRE' || ex['name'] == 'CORRIDA AO AR LIVRE') {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const OutdoorWalkingScreen()),
+            MaterialPageRoute(builder: (context) => OutdoorWalkingScreen(isRunning: ex['name'] == 'CORRIDA AO AR LIVRE')),
           );
         } else {
           Navigator.push(

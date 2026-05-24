@@ -147,6 +147,7 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
         _countLateralRaise(landmarks);
         break;
       case 'CAMINHADA ESTACIONÁRIA':
+      case 'CORRIDA ESTACIONÁRIA':
         _countStationaryWalk(landmarks);
         break;
       default:
@@ -172,9 +173,9 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     double leftKneeY = landmarks[25]['y'];
     double rightKneeY = landmarks[26]['y'];
 
-    // Se qualquer um dos joelhos subir significativamente (valor Y diminui)
-    // 0.15 é um valor de sensibilidade para "joelho alto"
-    bool kneeRaised = leftKneeY < (avgHipY + 0.05) || rightKneeY < (avgHipY + 0.05);
+    // Sensibilidade: Caminhada (0.05) vs Corrida (0.0 - Joelho no nível do quadril)
+    double threshold = widget.exercise == 'CORRIDA ESTACIONÁRIA' ? 0.0 : 0.05;
+    bool kneeRaised = leftKneeY < (avgHipY + threshold) || rightKneeY < (avgHipY + threshold);
 
     if (kneeRaised && !_isInMovement && !_goalReached) {
       _isInMovement = true;
@@ -313,15 +314,20 @@ class _BodyScanScreenState extends State<BodyScanScreen> {
     setState(() {
       _selectedGoal = goal;
       bool isWalk = widget.exercise == 'CAMINHADA ESTACIONÁRIA';
+      bool isRun = widget.exercise == 'CORRIDA ESTACIONÁRIA';
 
-      if (goal == "Emagrecer") _targetReps = isWalk ? 100 : 15;
-      if (goal == "Ganhar Massa") _targetReps = isWalk ? 50 : 10;
-      if (goal == "Resistência") _targetReps = isWalk ? 200 : 20;
+      if (goal == "Emagrecer") {
+        _targetReps = isRun ? 300 : (isWalk ? 100 : 15);
+      } else if (goal == "Ganhar Massa") {
+        _targetReps = isRun ? 150 : (isWalk ? 50 : 10);
+      } else if (goal == "Resistência") {
+        _targetReps = isRun ? 500 : (isWalk ? 200 : 20);
+      }
     });
 
     _flutterTts.stop();
     _flutterTts.speak("Objetivo $goal.");
-    String unit = widget.exercise == 'CAMINHADA ESTACIONÁRIA' ? "passos" : "repetições";
+    String unit = (widget.exercise.contains("CAMINHADA") || widget.exercise.contains("CORRIDA")) ? "passos" : "repetições";
     _flutterTts.speak("A meta são $_totalSets séries de $_targetReps $unit.");
     _flutterTts.speak("O tempo de pausa entre as séries deve ficar entre 45 segundos e 2 minutos, dependendo do seu objetivo e do nível de cansaço.");
     _flutterTts.speak("Pode começar a primeira série!");
